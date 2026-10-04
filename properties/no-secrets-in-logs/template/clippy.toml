@@ -1,0 +1,46 @@
+# Ban list for agent code (protected path). Enforced by tools/check.sh and the
+# gate with `-D` on the `app` crate only. The only sinks are nosecrets::audit
+# and nosecrets::deliver; the only input is nosecrets::schema::next_command.
+disallowed-macros = [
+  { path = "std::print", reason = "output only through nosecrets::deliver" },
+  { path = "std::println", reason = "output only through nosecrets::deliver" },
+  { path = "std::eprint", reason = "logging only through nosecrets::audit" },
+  { path = "std::eprintln", reason = "logging only through nosecrets::audit" },
+  { path = "std::dbg", reason = "logging only through nosecrets::audit" },
+  { path = "std::write", reason = "no direct writers" },
+  { path = "std::writeln", reason = "no direct writers" },
+  { path = "std::include", reason = "no external code" },
+  { path = "std::include_str", reason = "no external data" },
+  { path = "std::include_bytes", reason = "no external data" },
+  { path = "std::env", reason = "no environment input" },
+  { path = "std::option_env", reason = "no environment input" },
+]
+disallowed-methods = [
+  { path = "std::io::stdin", reason = "input only through nosecrets::schema::next_command" },
+  { path = "std::io::stdout", reason = "output only through nosecrets::deliver" },
+  { path = "std::io::stderr", reason = "logging only through nosecrets::audit" },
+  { path = "std::env::args", reason = "input only through nosecrets::schema::next_command" },
+  { path = "std::env::args_os", reason = "input only through nosecrets::schema::next_command" },
+  { path = "std::env::var", reason = "no environment input" },
+  { path = "std::env::var_os", reason = "no environment input" },
+  { path = "std::env::vars", reason = "no environment input" },
+  { path = "std::fs::read", reason = "no file I/O" },
+  { path = "std::fs::read_to_string", reason = "no file I/O" },
+  { path = "std::fs::write", reason = "no file I/O" },
+  { path = "std::fs::File::open", reason = "no file I/O" },
+  { path = "std::fs::File::create", reason = "no file I/O" },
+  { path = "std::fs::OpenOptions::new", reason = "no file I/O" },
+  { path = "std::process::Command::new", reason = "no subprocesses" },
+  { path = "std::boxed::Box::leak", reason = "no &'static str from runtime data" },
+  { path = "std::string::String::leak", reason = "no &'static str from runtime data" },
+  { path = "std::mem::transmute", reason = "no reinterpretation of labeled values" },
+  { path = "std::panic::set_hook", reason = "panic output goes to the log stream" },
+]
+disallowed-types = [
+  { path = "std::net::TcpStream", reason = "no network output" },
+  { path = "std::net::UdpSocket", reason = "no network output" },
+  { path = "std::fs::File", reason = "no file I/O" },
+  { path = "std::process::Command", reason = "no subprocesses" },
+  { path = "std::io::Stdout", reason = "output only through nosecrets::deliver" },
+  { path = "std::io::Stderr", reason = "logging only through nosecrets::audit" },
+]

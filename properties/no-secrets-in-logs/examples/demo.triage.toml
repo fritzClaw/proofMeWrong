@@ -1,0 +1,11 @@
+# Human-written triage for the demo app (INTENT.md §3.6). Lives outside the
+# run directory and is passed to the gate with --triage.
+[[suppress]]
+query = "Cleartext logging of sensitive information"
+file = "/app/src/main.rs"
+line = 117
+reason = """
+CodeQL false positive (case ii): the name heuristic treats `accounts` as
+private data. The logged value is `Account.user`, which is a `Public`
+command argument of `signup` in the frozen classification."""
+author = "human"

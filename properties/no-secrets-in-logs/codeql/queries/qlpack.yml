@@ -1,0 +1,4 @@
+name: proofmewrong/no-secrets-in-logs-queries
+version: 0.1.0
+dependencies:
+  codeql/rust-all: "*"

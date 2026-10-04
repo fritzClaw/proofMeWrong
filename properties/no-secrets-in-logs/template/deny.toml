@@ -1,0 +1,66 @@
+# Dependency allowlist (protected path), enforced by the gate with
+# `cargo deny check bans sources`. Only the crates below may appear in the
+# dependency graph. The direct dependencies of the trusted library are the
+# RustCrypto crates getrandom, argon2, hmac, sha2 and subtle; everything else
+# is their transitive closure or part of Verus (vstd and its macros).
+# No crate here depends on `log` or `tracing`; both are denied explicitly.
+
+[graph]
+all-features = false
+
+[bans]
+multiple-versions = "allow"
+wildcards = "allow"
+deny = [
+  { name = "log" },
+  { name = "tracing" },
+  { name = "tracing-core" },
+  { name = "slog" },
+  { name = "env_logger" },
+]
+allow = [
+  { name = "app" },
+  { name = "nosecrets" },
+  { name = "argon2" },
+  { name = "base64ct" },
+  { name = "blake2" },
+  { name = "block-buffer" },
+  { name = "cfg-if" },
+  { name = "convert_case" },
+  { name = "cpufeatures" },
+  { name = "crypto-common" },
+  { name = "digest" },
+  { name = "equivalent" },
+  { name = "generic-array" },
+  { name = "getrandom" },
+  { name = "hashbrown" },
+  { name = "hmac" },
+  { name = "indexmap" },
+  { name = "libc" },
+  { name = "password-hash" },
+  { name = "proc-macro2" },
+  { name = "quote" },
+  { name = "r-efi" },
+  { name = "rand_core" },
+  { name = "sha2" },
+  { name = "subtle" },
+  { name = "syn" },
+  { name = "synstructure" },
+  { name = "typenum" },
+  { name = "unicode-ident" },
+  { name = "version_check" },
+  { name = "verus_builtin" },
+  { name = "verus_builtin_macros" },
+  { name = "verus_prettyplease" },
+  { name = "verus_state_machines_macros" },
+  { name = "verus_syn" },
+  { name = "vstd" },
+  { name = "wasip2" },
+  { name = "wit-bindgen" },
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = ["https://github.com/verus-lang/verus.git"]

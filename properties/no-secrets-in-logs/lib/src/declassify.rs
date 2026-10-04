@@ -43,6 +43,7 @@ pub fn eq_public<K: AllowEqPublic>(a: &Secret<K>, p: &Public) -> (r: bool)
 /// Reveal a secret only when it is proven equal to an already public value.
 /// Used for requirement R7.4: a submitted identifier may be logged only if it
 /// matches an existing identity.
+#[allow(unused_variables)] // `a` is used in the precondition only
 pub fn known_identifier<K: AllowKnownIdentifier>(a: &Secret<K>, p: &Public) -> (r: Public)
     requires a@ == p@,
     ensures r@ == a@,

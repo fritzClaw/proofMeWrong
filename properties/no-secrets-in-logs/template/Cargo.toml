@@ -1,0 +1,7 @@
+# Project workspace created by tools/new-project.sh. Protected path.
+# trusted/nosecrets is deliberately not a member, so that clippy and the
+# structure check apply to the agent crate `app` only. The trusted library
+# is still verified by Verus as a dependency.
+[workspace]
+members = ["app"]
+resolver = "2"
