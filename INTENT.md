@@ -144,6 +144,8 @@ Everything the claim depends on without being proven by the pipeline run:
 - The single log sink `audit::log` (writes to stderr only).
 - The single user-delivery sink `deliver::to_user` (writes to stdout only).
 - The ban list (clippy config, `#![forbid(unsafe_code)]`, custom CodeQL query).
+- The **dependency allowlist** (§3.3b) and the crates on it, with thin crypto
+  wrappers carrying Verus `external_body` specs.
 - CodeQL models-as-data for the declassifiers.
 - Gate scripts and the gate test suite.
 - Toolchain: Verus, Z3, rustc, clippy, CodeQL CLI and query pack (pinned).
@@ -216,6 +218,23 @@ get different sinks:
 - The same pattern later supports properties such as "a secret only reaches
   its owner".
 
+### 3.3b Dependencies
+
+Every dependency is part of the trusted base and may contain sinks of its own
+(e.g. a crate calling `log::debug!` internally). Therefore:
+
+- The package ships a **closed allowlist** of crates, enforced by `cargo-deny`
+  in the gate. Initial list (RustCrypto): `getrandom` (CSPRNG), `argon2`
+  (password hashing), `hmac` + `sha2` (keyed hash, token hash), `subtle`
+  (constant-time comparison).
+- The gate checks that no allowed crate depends on `log` or `tracing`.
+- Each crypto call goes through a thin wrapper in the package library with a
+  Verus `external_body` spec (e.g. "returns a `Secret`", "constant-time
+  comparison").
+- The HMAC key for `keyed_hash` is itself a secret. In the prototype it is
+  generated randomly at process start, so correlation (R7.3) works within one
+  run only.
+
 ### 3.4 Pipeline
 
 ```
@@ -234,7 +253,7 @@ verdict + CodeQL triage ──► results log
 
 - The **gate is never run by an agent.** A human starts it after the agent is
   done. The agent's own local Verus results count for nothing.
-- **Gate** = Verus ✓ ∧ rustc/clippy ✓ ∧ CodeQL (with library models) clean ∧
+- **Gate** = Verus ✓ ∧ rustc/clippy ✓ ∧ cargo-deny (allowlist) ✓ ∧ CodeQL (with library models) clean ∧
   classification hash unchanged ∧ protected paths unchanged.
 - **Gate environment**: a pinned container image (Verus, Z3, rustc toolchain,
   clippy, CodeQL CLI + query pack, fixed Z3 `rlimit`). Same artifacts + same
@@ -247,7 +266,7 @@ verdict + CodeQL triage ──► results log
   alerts could hide spec gaps by renaming identifiers.
 - **Protected paths** (read-only for the agent; checked by the gate):
   classification, declassifier library, `Secret`/`Public`/`audit`/`deliver`, ban list,
-  CodeQL models and queries, gate scripts, gate test suite.
+  CodeQL models and queries, dependency allowlist, gate scripts, gate test suite.
 - **Iteration budget**: at most N local rounds (initially 10–20). After that the
   run is marked *failed* and logged. Failed runs are research data.
 
@@ -311,6 +330,7 @@ the classification template, the library and a local check command
 4. Comparison of prover technologies and agents/LLMs using the prototype's
    pass rate as a baseline.
 5. Multiple properties composed in one program.
+6. Key management for `keyed_hash` across runs.
 
 ## 5. Open items
 
