@@ -1,0 +1,20 @@
+[package]
+name = "nosecrets"
+version = "0.1.0"
+edition = "2021"
+description = "Trusted base of the no-secrets-in-logs property package"
+license = "GPL-3.0-or-later"
+
+[dependencies]
+vstd = { git = "https://github.com/verus-lang/verus.git", rev = "fc7d32e1d9917d31dda119e5742286b10c0ffcd6" }
+getrandom = "0.3"
+argon2 = { version = "0.5", default-features = false, features = ["alloc", "password-hash"] }
+hmac = "0.12"
+sha2 = "0.10"
+subtle = "2.6"
+
+[package.metadata.verus]
+verify = true
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(verus_only)'] }

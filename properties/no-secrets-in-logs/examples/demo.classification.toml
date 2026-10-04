@@ -1,0 +1,55 @@
+# Demo classification used by the package's own tests and the gate test
+# suite. It deliberately exercises every view. It is NOT the classification
+# of any sample application; step 1 derives that from the requirements.
+format = "no-secrets-in-logs/classification/v1"
+
+[kinds.password]
+description = "a user's password"
+views = ["password_hash", "check"]
+
+[kinds.api_key]
+description = "an API key, shown once on creation"
+views = ["digest", "check", "last_n:4", "eq"]
+deliver = true
+generate = "hex:32"
+
+[kinds.pin]
+description = "a one-time numeric code"
+views = ["eq", "check", "len"]
+deliver = true
+generate = "digits:6"
+
+[kinds.email]
+description = "an email address"
+views = ["keyed_hash", "eq", "check"]
+deliver = true
+
+[kinds.identifier]
+description = "a submitted login identifier (may be a mistyped password)"
+views = ["eq_public", "known_identifier"]
+
+[[commands]]
+name = "signup"
+args = [
+  { name = "user", label = "public" },
+  { name = "email", label = "secret", kind = "email" },
+  { name = "password", label = "secret", kind = "password" },
+]
+
+[[commands]]
+name = "signin"
+args = [
+  { name = "identifier", label = "secret", kind = "identifier" },
+  { name = "password", label = "secret", kind = "password" },
+]
+
+[[commands]]
+name = "use-key"
+args = [ { name = "key", label = "secret", kind = "api_key" } ]
+
+[[commands]]
+name = "wait"
+args = [ { name = "minutes", label = "u64" } ]
+
+[[commands]]
+name = "quit"
