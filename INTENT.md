@@ -7,6 +7,12 @@
 
 Status: v0.1 (prototype scope) · Decisions captured from a grilling session.
 
+**Working agreement.** The project owner decides intent: goals, scope, the
+claim, trust boundaries and success criteria. Implementation details of the
+prototype are delegated to the implementing agent, which picks a working
+solution, records it in this document, and escalates only when a detail would
+change the claim, the trusted base or the scope.
+
 ---
 
 ## 1. WHY
@@ -100,6 +106,10 @@ injection later.
 - Human review/approval of the classification is **optional** and recommended
   when building something of value.
 
+- Concretely, the classification is a **typed command schema**: every CLI
+  command with a label and policy per argument, plus the internally generated
+  values (tokens, codes, hashes). See §3.3c.
+
 ### 2.4 Example application
 
 The agent's input is a **requirements document**, not code:
@@ -139,6 +149,8 @@ The sample is not important in itself. It must only exercise the property:
 Everything the claim depends on without being proven by the pipeline run:
 
 - `Secret<T>` / `Public<T>` types and their encapsulation.
+- The trusted **command parser** generated from / driven by the classification
+  schema (§3.3c).
 - Declassifier library (proven against its Verus specs; the *policy* of what
   may be revealed is a human decision).
 - The single log sink `audit::log` (writes to stderr only).
@@ -234,6 +246,46 @@ Every dependency is part of the trusted base and may contain sinks of its own
 - The HMAC key for `keyed_hash` is itself a secret. In the prototype it is
   generated randomly at process start, so correlation (R7.3) works within one
   run only.
+
+### 3.3c Where secrets are born and where `Public` comes from
+
+The type guarantee holds only if a secret is a `Secret` from the first moment
+it exists, and if arbitrary strings cannot become `Public`.
+
+- **No raw input in agent code.** A trusted parser in the package reads stdin
+  and produces typed commands according to the frozen schema. Agent code never
+  sees the raw input line.
+- **Secrets are born in trusted code only:** `Secret` fields from the parser,
+  and `Secret` results from the CSPRNG and hash wrappers. No secret ever
+  exists as a plain `String` in agent code.
+- **`Public` comes only from:** public fields of parsed commands; string
+  literals (`Public::lit("login.failure")`); numbers and enums; combinations of
+  `Public` values via a `public_format!` that accepts only `Public` arguments;
+  and the declassifiers. There is no `Public::new(String)` for agent code.
+- **R7.4 as a value-dependent declassifier:** the login identifier is labeled
+  `Secret` (it might be a password). It becomes `Public` only through
+  `known_identifier(id, &store)` with the Verus precondition
+  `requires store.contains_identifier(id)`.
+
+Example schema fragment:
+
+```toml
+[command.login]
+identifier = { label = "secret", views = ["known_identifier"] }
+password   = { label = "secret", views = [] }
+
+[command.register]
+username = { label = "public" }
+email    = { label = "secret", views = ["keyed_hash"], deliver = true }
+password = { label = "secret", views = [] }
+
+[generated.access_token]
+label = "secret"
+views = ["last_n(8)"]
+deliver = "once"
+```
+
+The exact format is an implementation detail of package v0.1.
 
 ### 3.4 Pipeline
 
@@ -337,6 +389,8 @@ the classification template, the library and a local check command
 - Which agent/model runs steps 1 and 2. Default: Claude Code headless, with
   separate sessions per step and the model version logged per run.
 - Exact iteration budget and Z3 `rlimit`.
+
+All other open details are delegated to implementation (see working agreement).
 
 ## 6. References
 
