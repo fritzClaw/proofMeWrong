@@ -40,6 +40,7 @@ RUN echo '# warmup' > /tmp/req.md \
     && /opt/package/tools/new-project.sh /tmp/warm /tmp/req.md \
     && cp /opt/package/examples/demo.classification.toml /tmp/warm/classification.toml \
     && /opt/package/tools/freeze.sh /tmp/warm \
+    && echo "fn main() {}" > /tmp/warm/app/src/main.rs \
     && cd /tmp/warm && cargo fetch --locked && rm -rf /tmp/warm /tmp/req.md
 ENV CARGO_NET_OFFLINE=true
 
