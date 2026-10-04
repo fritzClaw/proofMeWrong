@@ -93,6 +93,8 @@ injection later.
   to a separate, machine-readable **classification** file.
 - The classification also contains the **declassification policy**: for each
   secret, the allowed views (e.g. `password: []`, `access_token: [last8]`).
+- The classification also states which secrets may be **delivered to the user**
+  (e.g. `session_token: deliver`, `password: no-deliver`), see §3.3a.
 - The classification is **frozen** before coding starts (hash recorded). The
   coding agent must not change it.
 - Human review/approval of the classification is **optional** and recommended
@@ -139,7 +141,8 @@ Everything the claim depends on without being proven by the pipeline run:
 - `Secret<T>` / `Public<T>` types and their encapsulation.
 - Declassifier library (proven against its Verus specs; the *policy* of what
   may be revealed is a human decision).
-- The single log sink `audit::log`.
+- The single log sink `audit::log` (writes to stderr only).
+- The single user-delivery sink `deliver::to_user` (writes to stdout only).
 - The ban list (clippy config, `#![forbid(unsafe_code)]`, custom CodeQL query).
 - CodeQL models-as-data for the declassifiers.
 - Gate scripts and the gate test suite.
@@ -179,11 +182,11 @@ Target size: < ~300 LOC of Rust plus configuration, reviewable line by line.
 
 | Layer | Guarantees |
 |---|---|
-| **rustc (types)** | Explicit-flow property. `Secret<T>` implements neither `Display` nor `Debug`; `Public::new` is visible only inside the package library; `audit::log` accepts only `Public`. |
+| **rustc (types)** | Explicit-flow property. `Secret<T>` implements neither `Display` nor `Debug`; `Public::new` is visible only inside the package library; `audit::log` accepts only `Public`; `deliver::to_user` is the only function that accepts a `Secret` for output. |
 | **clippy / ban list** | No other output sinks in the verified code: no print macros, `dbg!`, `log`/`tracing`, formatting `panic!`, writes to stdout/stderr/files; `#![forbid(unsafe_code)]`; no `transmute`. |
 | **Verus (library)** | Each declassifier meets its spec, e.g. `last_n(s, n)` returns exactly the last `n` characters. |
 | **Verus (agent-written)** | Preconditions at declassifier call sites (e.g. `token.len() == 40` before `last_n(token, 8)`), and value-dependent logging policies from the requirements. |
-| **CodeQL** | Independent cross-check: `rust/cleartext-logging` with models for our declassifiers, plus a custom query "output sink outside `audit`". |
+| **CodeQL** | Independent cross-check: `rust/cleartext-logging` with models for our declassifiers, plus a custom query "output sink outside `audit` / `deliver`". |
 
 ### 3.3 Declassification
 
@@ -192,6 +195,26 @@ Target size: < ~300 LOC of Rust plus configuration, reviewable line by line.
 - The coding agent cannot define new conversions.
 - Which declassifier may be applied to which secret is set by the frozen
   classification.
+
+### 3.3a Delivering secrets to the user
+
+Some secrets must legitimately leave the program: the session token after
+login, the full access token exactly once on creation, verification and
+recovery codes in the outbox. Logs and users are different audiences, so they
+get different sinks:
+
+| Sink | Accepts | Stream |
+|---|---|---|
+| `audit::log` | `Public` only | stderr |
+| `deliver::to_user` | `Secret` marked `deliver` in the classification, or `Public` | stdout / outbox |
+| anything else | nothing (banned) | — |
+
+- The property remains "no secrets in **logs**". Delivery is not a leak, but
+  it happens only through this one choke point.
+- The gate checks that `deliver` never writes to stderr and `audit` never
+  writes to stdout.
+- The same pattern later supports properties such as "a secret only reaches
+  its owner".
 
 ### 3.4 Pipeline
 
@@ -223,7 +246,7 @@ verdict + CodeQL triage ──► results log
   CodeQL's sensitivity detection is largely name-based, so an agent seeing its
   alerts could hide spec gaps by renaming identifiers.
 - **Protected paths** (read-only for the agent; checked by the gate):
-  classification, declassifier library, `Secret`/`Public`/`audit`, ban list,
+  classification, declassifier library, `Secret`/`Public`/`audit`/`deliver`, ban list,
   CodeQL models and queries, gate scripts, gate test suite.
 - **Iteration budget**: at most N local rounds (initially 10–20). After that the
   run is marked *failed* and logged. Failed runs are research data.
@@ -264,7 +287,7 @@ frozen as `no-secrets-in-logs` v0.1. Structure (one directory per property):
 properties/no-secrets-in-logs/
   SKILL.md                 # Agent Skill: instructions for coding agents
   classification.template  # format and example for step 1
-  lib/                     # Secret/Public, audit::log, declassifiers + Verus proofs
+  lib/                     # Secret/Public, audit::log, deliver::to_user, declassifiers + Verus proofs
   bans/                    # clippy config, lint settings
   codeql/                  # custom query, models-as-data for declassifiers
   gate/                    # gate scripts (NOT shipped to agents in the skill)
