@@ -75,6 +75,7 @@ pub enum Command {
     UseKey { key: Secret<ApiKey> },
     Wait { minutes: u64 },
     Quit,
+    Probe { user: Public, email: Secret<Email>, password: Secret<Password>, identifier: Secret<Identifier>, key: Secret<ApiKey>, pin: Secret<Pin> },
     /// A known command with wrong arguments (`command` is its name), or an
     /// unknown command (`command` is `<unknown>`). Arguments are dropped.
     Invalid { command: Public },
@@ -124,6 +125,12 @@ pub fn next_command() -> Option<Command> {
                 return Some(Command::Invalid { command: Public::lit("quit") });
             }
             Command::Quit
+        }
+        "probe" => {
+            if args.len() != 6 {
+                return Some(Command::Invalid { command: Public::lit("probe") });
+            }
+            Command::Probe { user: Public::from_chars(args[0].clone()), email: Secret::from_chars(args[1].clone()), password: Secret::from_chars(args[2].clone()), identifier: Secret::from_chars(args[3].clone()), key: Secret::from_chars(args[4].clone()), pin: Secret::from_chars(args[5].clone()) }
         }
         _ => Command::Invalid { command: Public::lit("<unknown>") },
     };

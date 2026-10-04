@@ -153,8 +153,8 @@ Everything the claim depends on without being proven by the pipeline run:
   schema (§3.3c).
 - Declassifier library (proven against its Verus specs; the *policy* of what
   may be revealed is a human decision).
-- The single log sink `audit::log` (writes to stderr only).
-- The single user-delivery sink `deliver::to_user` (writes to stdout only).
+- The single log sink `audit` (`Entry` + `emit`, writes to stderr only).
+- The single user-delivery sink `deliver` (`Line` + `emit`, writes to stdout only).
 - The ban list (clippy config, `#![forbid(unsafe_code)]`, custom CodeQL query).
 - The **dependency allowlist** (§3.3b) and the crates on it, with thin crypto
   wrappers carrying Verus `external_body` specs.
@@ -196,7 +196,8 @@ Target size: < ~300 LOC of Rust plus configuration, reviewable line by line.
 
 | Layer | Guarantees |
 |---|---|
-| **rustc (types)** | Explicit-flow property. `Secret<T>` implements neither `Display` nor `Debug`; `Public::new` is visible only inside the package library; `audit::log` accepts only `Public`; `deliver::to_user` is the only function that accepts a `Secret` for output. |
+| **rustc (types)** | Explicit-flow property. `Secret<T>` implements neither `Display` nor `Debug`; `Public` cannot be constructed from runtime strings outside the package library; `audit` accepts only `Public`; `deliver::Line::secret` is the only function that accepts a `Secret` for output. |
+| **structure check** | All agent code inside `verus!`; no proof-cheating or verification-hiding constructs (§3.9). |
 | **clippy / ban list** | No other output sinks in the verified code: no print macros, `dbg!`, `log`/`tracing`, formatting `panic!`, writes to stdout/stderr/files; `#![forbid(unsafe_code)]`; no `transmute`. |
 | **Verus (library)** | Each declassifier meets its spec, e.g. `last_n(s, n)` returns exactly the last `n` characters. |
 | **Verus (agent-written)** | Preconditions at declassifier call sites (e.g. `token.len() == 40` before `last_n(token, 8)`), and value-dependent logging policies from the requirements. |
@@ -219,8 +220,8 @@ get different sinks:
 
 | Sink | Accepts | Stream |
 |---|---|---|
-| `audit::log` | `Public` only | stderr |
-| `deliver::to_user` | `Secret` marked `deliver` in the classification, or `Public` | stdout / outbox |
+| `audit::Entry` / `audit::emit` | `Public` only | stderr |
+| `deliver::Line` / `deliver::emit` | `Secret` whose kind is marked `deliver` in the classification, or `Public` | stdout |
 | anything else | nothing (banned) | — |
 
 - The property remains "no secrets in **logs**". Delivery is not a leak, but
@@ -260,8 +261,8 @@ it exists, and if arbitrary strings cannot become `Public`.
   exists as a plain `String` in agent code.
 - **`Public` comes only from:** public fields of parsed commands; string
   literals (`Public::lit("login.failure")`); numbers and enums; combinations of
-  `Public` values via a `public_format!` that accepts only `Public` arguments;
-  and the declassifiers. There is no `Public::new(String)` for agent code.
+  `Public` values (`concat`); and the declassifiers. There is no constructor
+  from a runtime `String` for agent code.
 - **R7.4 as a value-dependent declassifier:** the login identifier is labeled
   `Secret` (it might be a password). It becomes `Public` only through
   `known_identifier(id, &store)` with the Verus precondition
@@ -351,23 +352,65 @@ formal properties diverge.
 
 ### 3.8 Property package (reusable unit)
 
-Built by us in this repo **before** the first pipeline run, reviewed and
-frozen as `no-secrets-in-logs` v0.1. Structure (one directory per property):
+Built in this repo **before** the first pipeline run, reviewed and frozen as
+`no-secrets-in-logs` v0.1 at `properties/no-secrets-in-logs/` (see its
+README for the layout and the trusted-base inventory):
 
 ```
 properties/no-secrets-in-logs/
-  SKILL.md                 # Agent Skill: instructions for coding agents
-  classification.template  # format and example for step 1
-  lib/                     # Secret/Public, audit::log, deliver::to_user, declassifiers + Verus proofs
-  bans/                    # clippy config, lint settings
-  codeql/                  # custom query, models-as-data for declassifiers
-  gate/                    # gate scripts (NOT shipped to agents in the skill)
-  tests/                   # gate test suite: negatives, positives, mutation harness
+  skills/      Agent Skills: -classify (step 1) and -code (step 2)
+  lib/         trusted library `nosecrets` (labels, declassifiers, crypto, audit, deliver, parser)
+  codegen/     classification -> schema.rs (kinds, permissions, typed commands, parser); CodeQL models
+  template/    project skeleton: ban list, dependency allowlist, pinned toolchain and lock file
+  codeql/      models-as-data and the choke-point query
+  tools/       new-project, freeze, local check, protected-path and structure checks
+  gate/        human-run gate and pinned container image (NOT shipped to agents)
+  tests/       gate test suite and mutation testing
+  examples/    demo classification, demo app (positive reference), demo triage
 ```
 
-Agents receive the package as an **Agent Skill** containing the instructions,
-the classification template, the library and a local check command
-(rustc/clippy/Verus only). The gate stays outside the skill.
+Agents receive only the skill for their step plus the run directory. The
+gate stays outside.
+
+### 3.9 Implementation decisions (v0.1)
+
+Delegated details, recorded per the working agreement:
+
+- **Verus pin.** Verus publishes only rolling releases and deletes old ones.
+  The gate image (`gate/image`) vendors the pinned archive
+  (0.2026.10.04.fc7d32e, SHA-256 in `versions.env`); archive the image or
+  the vendor directory with the verdicts.
+- **`--no-cheating` is not usable.** Verus applies it to every imported crate
+  except vstd, so it would reject the trusted library's `external_body`
+  wrappers. The structure check enforces the same bans on agent code only
+  (`assume`, `admit`, `external`, `external_body`, `assume_specification`,
+  `cfg`, `macro_rules`, `unsafe`, `include`, non-allowlisted `verifier::`
+  attributes).
+- **Code outside `verus!` is never verified.** The structure check requires
+  each agent file to contain only `use`, `mod` and one `verus!` block.
+- **Classification binding through types.** Each secret kind is a marker type;
+  each granted view is a trait implemented in the generated schema. Since the
+  traits and the marker types live in the trusted crate, the orphan rule
+  stops agent code from granting itself permissions.
+- **One-bit results.** Comparisons and format checks return `bool`. They are
+  declassifiers (views `eq`, `eq_public`, `check`, `password_hash`, `digest`)
+  that reveal one bit, and must be granted like any other view.
+- **Protected paths by re-derivation.** The gate does not trust any hash file
+  inside the run. It re-derives every protected file from the package and the
+  classification, and checks the classification against the hash the human
+  recorded at freeze time and passes on the command line. Triage files are
+  also passed from outside the run.
+- **Clean gate runs.** The gate copies the run and builds with a fresh target
+  directory (cargo does not key path dependencies by path, so stale artifacts
+  of another trusted copy could otherwise be reused).
+- **CodeQL heuristics.** CodeQL's name-based sensitivity produces false
+  positives (e.g. `accounts[i].user`), which go through human triage
+  (case ii in §3.6); the demo triage file shows the format.
+- **Stream separation.** `audit` writes only to stderr and `deliver` only to
+  stdout by construction in the trusted library.
+- **Gate image base.** `python:3.11-bookworm`, pinned by digest and pulled
+  through `mirror.gcr.io`. Docker Hub rate limits and blocked Debian mirrors
+  in the build environment ruled out a slimmer image.
 
 ---
 
@@ -388,7 +431,8 @@ the classification template, the library and a local check command
 
 - Which agent/model runs steps 1 and 2. Default: Claude Code headless, with
   separate sessions per step and the model version logged per run.
-- Exact iteration budget and Z3 `rlimit`.
+- Iteration budget: default 20 local checks (in the coding skill). Z3
+  `rlimit`: 30 (gate).
 
 All other open details are delegated to implementation (see working agreement).
 

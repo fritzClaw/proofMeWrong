@@ -53,3 +53,15 @@ args = [ { name = "minutes", label = "u64" } ]
 
 [[commands]]
 name = "quit"
+
+# Test-only command providing one value of every kind (gate test suite).
+[[commands]]
+name = "probe"
+args = [
+  { name = "user", label = "public" },
+  { name = "email", label = "secret", kind = "email" },
+  { name = "password", label = "secret", kind = "password" },
+  { name = "identifier", label = "secret", kind = "identifier" },
+  { name = "key", label = "secret", kind = "api_key" },
+  { name = "pin", label = "secret", kind = "pin" },
+]

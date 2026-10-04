@@ -162,6 +162,7 @@ fn main() {
                 audit::emit(e);
                 respond("error invalid_input");
             }
+            Command::Probe { .. } => respond("error invalid_input"),
             Command::Empty => {}
         }
     }

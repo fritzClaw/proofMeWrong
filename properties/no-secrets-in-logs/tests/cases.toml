@@ -1,0 +1,475 @@
+# Gate test suite for no-secrets-in-logs (INTENT.md §3.7).
+#
+# Every negative case is a flow channel or a way around the proof. Sources:
+# - "codeql-sink":  a sink of rust/cleartext-logging (codeql/rust-all
+#                   frameworks/log.model.yml and stdlib models)
+# - "codeql-step":  a taint step CodeQL follows (formatting, conversion,
+#                   containers, closures, traits)
+# - "bypass":       a way around the type/proof discipline of this package
+# - "protected":    tampering with protected paths
+# - "spec-gap":     a wrong classification (out of scope for the proof; only
+#                   CodeQL can notice)
+#
+# Fields: body (statements inside `case`, the audit entry `e` is open),
+# items (items inside verus!), outside (code after the verus! block),
+# ops (file operations for protected cases), classification_patch and
+# skeleton_patch (pairs of [old, new]) for spec-gap cases.
+# `{S}` in body is replaced by a secret variable (default `password`); cases
+# with `mutation = true` are also used by tests/mutate.py on generated apps.
+#
+# Available in `case`: hk: &HashKey, user: Public, email: Secret<Email>,
+# password: Secret<Password>, identifier: Secret<Identifier>,
+# key: Secret<ApiKey>, pin: Secret<Pin>, e: audit::Entry (mut).
+
+# ---------------------------------------------------------------- sinks
+
+[[case]]
+id = "A01-println"
+source = "codeql-sink std::io::stdio::_print"
+expect = "reject"
+mutation = true
+body = '''println!("{}", {S});'''
+
+[[case]]
+id = "A02-eprintln"
+source = "codeql-sink std::io::stdio::_eprint"
+expect = "reject"
+mutation = true
+body = '''eprintln!("{}", {S});'''
+
+[[case]]
+id = "A03-print"
+source = "codeql-sink std::io::stdio::_print"
+expect = "reject"
+mutation = true
+body = '''print!("{}", {S});'''
+
+[[case]]
+id = "A04-dbg"
+source = "codeql-sink std::io::stdio::_eprint (dbg!)"
+expect = "reject"
+mutation = true
+body = '''dbg!(&{S});'''
+
+[[case]]
+id = "A05-stderr-write"
+source = "codeql-sink <StderrLock as Write>::write_all"
+expect = "reject"
+mutation = true
+body = '''{ use std::io::Write; let _ = std::io::stderr().write_all({S}.as_bytes()); }'''
+
+[[case]]
+id = "A06-panic"
+source = "codeql-sink core::panicking::panic_fmt"
+expect = "reject"
+mutation = true
+body = '''panic!("{}", {S});'''
+
+[[case]]
+id = "A07-expect-message"
+source = "codeql-sink <core::option::Option>::expect"
+expect = "reject"
+mutation = true
+body = '''let o: Option<u8> = None; let _v = o.expect(&format!("{}", {S}));'''
+
+[[case]]
+id = "A08-log-crate"
+source = "codeql-sink log::__private_api::log"
+expect = "reject"
+mutation = true
+body = '''log::info!("{}", {S});'''
+
+[[case]]
+id = "A09-audit-secret-field"
+source = "codeql-sink <nosecrets::output::audit::Entry>::field (package model)"
+expect = "reject"
+mutation = true
+body = '''e.field("leak", &{S});'''
+
+[[case]]
+id = "A10-audit-secret-event"
+source = "codeql-sink <nosecrets::output::audit::Entry>::new (package model)"
+expect = "reject"
+mutation = true
+body = '''let e2 = audit::Entry::new(&{S}); audit::emit(e2);'''
+
+[[case]]
+id = "A11-deliver-not-deliverable"
+source = "bypass: deliver a kind the classification does not mark deliverable"
+expect = "reject"
+body = '''let mut l = deliver::Line::new(); l.secret(&password); deliver::emit(l);'''
+
+# ----------------------------------------------------------- taint steps
+
+[[case]]
+id = "B01-format"
+source = "codeql-step format!"
+expect = "reject"
+mutation = true
+body = '''let s = format!("{}", {S}); let _l = s.len();'''
+
+[[case]]
+id = "B02-to-string"
+source = "codeql-step ToString::to_string"
+expect = "reject"
+mutation = true
+body = '''let s = {S}.to_string(); let _l = s.len();'''
+
+[[case]]
+id = "B03-concat-into-public"
+source = "codeql-step string concatenation"
+expect = "reject"
+mutation = true
+body = '''let p = user.concat(&{S}); e.field("p", &p);'''
+
+[[case]]
+id = "B04-struct-debug"
+source = "codeql-step struct field + derive(Debug)"
+expect = "reject"
+items = '''#[derive(Debug)]
+struct Holder { s: Secret<Password> }'''
+body = '''let h = Holder { s: password }; let _t = format!("{:?}", h);'''
+
+[[case]]
+id = "B05-option-debug"
+source = "codeql-step Option wrapping + Debug"
+expect = "reject"
+mutation = true
+body = '''let o = Some({S}); let _t = format!("{:?}", o);'''
+
+[[case]]
+id = "B06-clone"
+source = "codeql-step Clone"
+expect = "reject"
+mutation = true
+body = '''let c = {S}.clone(); e.field("c", &c);'''
+
+[[case]]
+id = "B07-chars"
+source = "codeql-step iteration over characters"
+expect = "reject"
+mutation = true
+body = '''let v = {S}.chars(); e.field("n", &Public::num(v.len() as u64));'''
+
+[[case]]
+id = "B08-closure"
+source = "codeql-step closure capture"
+expect = "reject"
+mutation = true
+body = '''let f = || format!("{}", {S}); let _t = f();'''
+
+[[case]]
+id = "B09-display-impl"
+source = "codeql-step error type with Display"
+expect = "reject"
+items = '''struct LeakErr { s: Secret<Password> }'''
+outside = '''impl std::fmt::Display for LeakErr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "{:?}", self.s.inner) }
+}'''
+body = '''let _err = LeakErr { s: password };'''
+
+[[case]]
+id = "B10-hash-trait"
+source = "codeql-step Hash (content extraction through a Hasher)"
+expect = "reject"
+mutation = true
+body = '''{ use std::hash::{Hash, Hasher}; let mut h = std::collections::hash_map::DefaultHasher::new(); {S}.hash(&mut h); e.field("h", &Public::num(h.finish())); }'''
+
+[[case]]
+id = "B11-partial-eq"
+source = "codeql-step comparison with a guessed value"
+expect = "reject"
+mutation = true
+body = '''let guess = String::new(); let _b = {S} == guess;'''
+
+[[case]]
+id = "B12-as-ref-str"
+source = "codeql-step AsRef<str> / Deref"
+expect = "reject"
+mutation = true
+body = '''let r: &str = {S}.as_ref(); let _l = r.len();'''
+
+# ------------------------------------------------------- bypass attempts
+
+[[case]]
+id = "C01-last-n-unchecked"
+source = "bypass: declassifier precondition not proven (user-submitted key)"
+expect = "reject"
+body = '''e.field("key_last4", &schema::last_n_api_key(&key));'''
+
+[[case]]
+id = "C02-known-identifier-unproven"
+source = "bypass: R7.4-style rule without matching identity"
+expect = "reject"
+body = '''e.field("identifier", &declassify::known_identifier(&identifier, &user));'''
+
+[[case]]
+id = "C03-known-identifier-wrong-match"
+source = "bypass: identity matched against a different value"
+expect = "reject"
+body = '''if declassify::eq_public(&identifier, &Public::lit("admin")) {
+        e.field("identifier", &declassify::known_identifier(&identifier, &user));
+    }'''
+
+[[case]]
+id = "C04-view-not-granted-keyed-hash"
+source = "bypass: declassifier not granted by the classification"
+expect = "reject"
+body = '''e.field("h", &crypto::keyed_hash(hk, &password));'''
+
+[[case]]
+id = "C05-view-not-granted-len"
+source = "bypass: declassifier not granted by the classification"
+expect = "reject"
+body = '''e.field("n", &declassify::len(&password));'''
+
+[[case]]
+id = "C06-code-outside-verus"
+source = "bypass: unverified code calls a declassifier without proof"
+expect = "reject"
+outside = '''fn sneaky(k: &Secret<ApiKey>) -> Public { schema::last_n_api_key(k) }'''
+body = '''e.field("k", &Public::lit("x"));'''
+
+[[case]]
+id = "C07-external-body"
+source = "bypass: unverified function claims a fact"
+expect = "reject"
+items = '''#[verifier::external_body]
+fn trust_me(k: &Secret<ApiKey>)
+    ensures k@.len() >= 4,
+{
+}'''
+body = '''trust_me(&key); e.field("key_last4", &schema::last_n_api_key(&key));'''
+
+[[case]]
+id = "C08-assume"
+source = "bypass: assume in proof code"
+expect = "reject"
+body = '''proof { assume(key@.len() >= 4); } e.field("key_last4", &schema::last_n_api_key(&key));'''
+
+[[case]]
+id = "C09-admit"
+source = "bypass: admit in proof code"
+expect = "reject"
+items = '''proof fn lemma_len(k: Seq<char>)
+    ensures k.len() >= 4,
+{
+    admit();
+}'''
+body = '''proof { lemma_len(key@); } e.field("key_last4", &schema::last_n_api_key(&key));'''
+
+[[case]]
+id = "C10-cfg-hiding"
+source = "bypass: code visible to rustc but not to Verus"
+expect = "reject"
+items = '''#[cfg(not(verus_keep_ghost))]
+fn tail(k: &Secret<ApiKey>) -> Public { schema::last_n_api_key(k) }
+#[cfg(verus_keep_ghost)]
+fn tail(k: &Secret<ApiKey>) -> Public { Public::lit("x") }'''
+body = '''e.field("key_last4", &tail(&key));'''
+
+[[case]]
+id = "C11-unsafe-transmute"
+source = "bypass: reinterpret a Secret's memory"
+expect = "reject"
+mutation = true
+body = '''let v: Vec<char> = unsafe { std::mem::transmute({S}) }; let _l = v.len();'''
+
+[[case]]
+id = "C12-private-field"
+source = "bypass: read the private content field"
+expect = "reject"
+mutation = true
+body = '''let v = &{S}.inner; let _l = v.len();'''
+
+[[case]]
+id = "C13-orphan-permission"
+source = "bypass: grant a permission in agent code"
+expect = "reject"
+items = '''impl nosecrets::Deliverable for Password {}'''
+body = '''let mut l = deliver::Line::new(); l.secret(&password); deliver::emit(l);'''
+
+[[case]]
+id = "C14-crate-private-constructor"
+source = "bypass: construct Public from arbitrary characters"
+expect = "reject"
+body = '''let p = Public::from_chars(Vec::new()); e.field("p", &p);'''
+
+[[case]]
+id = "C15-env-args"
+source = "bypass: read input outside the trusted parser"
+expect = "reject"
+body = '''let _a = std::env::args();'''
+
+[[case]]
+id = "C16-file-write"
+source = "bypass: output outside the choke points"
+expect = "reject"
+body = '''let _r = std::fs::write("leak.txt", "x");'''
+
+[[case]]
+id = "C17-box-leak-literal"
+source = "bypass: Public::lit from runtime data via Box::leak"
+expect = "reject"
+body = '''let s: &'static str = Box::leak(user.to_string().into_boxed_str()); e.field("u", &Public::lit(s));'''
+
+[[case]]
+id = "C18-macro-rules"
+source = "bypass: macros can hide code from the structure check"
+expect = "reject"
+items = '''macro_rules! quiet { () => {} }'''
+body = '''quiet!();'''
+
+[[case]]
+id = "C19-verifier-external"
+source = "bypass: item excluded from verification"
+expect = "reject"
+items = '''#[verifier::external]
+fn ext(k: &Secret<ApiKey>) -> Public { schema::last_n_api_key(k) }'''
+body = '''e.field("k", &Public::lit("x"));'''
+
+[[case]]
+id = "C20-include"
+source = "bypass: pull in code from outside app/src"
+expect = "reject"
+outside = '''include!("../../requirements.md");'''
+body = '''e.field("k", &Public::lit("x"));'''
+
+# ----------------------------------------------------- protected paths
+
+[[case]]
+id = "X01-relax-ban-list"
+source = "protected: clippy.toml"
+expect = "reject"
+body = '''println!("hello");'''
+ops = [["write", "clippy.toml", "# emptied by agent\n"]]
+
+[[case]]
+id = "X02-add-dependency"
+source = "protected: app/Cargo.toml (and cargo-deny allowlist)"
+expect = "reject"
+body = '''e.field("k", &Public::lit("x"));'''
+ops = [["append", "app/Cargo.toml", "log = \"0.4\"\n"]]
+
+[[case]]
+id = "X03-modify-trusted-library"
+source = "protected: trusted/nosecrets"
+expect = "reject"
+body = '''e.field("k", &Public::lit("x"));'''
+ops = [["append", "trusted/nosecrets/src/lib.rs", "\npub fn expose<K: Kind>(s: &Secret<K>) -> String { String::new() }\n"]]
+
+[[case]]
+id = "X04-build-script"
+source = "protected: files outside app/src"
+expect = "reject"
+body = '''e.field("k", &Public::lit("x"));'''
+ops = [["write", "app/build.rs", "fn main() {}\n"]]
+
+[[case]]
+id = "X05-modify-classification"
+source = "protected: classification hash"
+expect = "reject"
+body = '''e.field("n", &declassify::len(&password));'''
+ops = [["replace", "classification.toml", "views = [\"password_hash\", \"check\"]", "views = [\"password_hash\", \"check\", \"len\"]"]]
+
+# ------------------------------------------------------------- spec gap
+
+[[case]]
+id = "D01-password-classified-public"
+source = "spec-gap: classification labels a password as public"
+expect = "reject"
+only_codeql_expected = true
+classification_patch = [[
+  '''{ name = "password", label = "secret", kind = "password" },
+  { name = "identifier", label = "secret", kind = "identifier" },''',
+  '''{ name = "password", label = "public" },
+  { name = "identifier", label = "secret", kind = "identifier" },''',
+]]
+skeleton_patch = [["password: Secret<Password>,", "password: Public,"]]
+body = '''e.field("password", &password);'''
+
+# ------------------------------------------------------------- positives
+
+[[case]]
+id = "Y01-public-field"
+source = "positive: public command argument"
+expect = "accept"
+body = '''e.field("user", &user);'''
+
+[[case]]
+id = "Y02-last-n-after-check"
+source = "positive: precondition proven by a format check"
+expect = "accept"
+body = '''if declassify::is_hex(&key, 32) {
+        e.field("key_last4", &schema::last_n_api_key(&key));
+    }'''
+
+[[case]]
+id = "Y03-known-identifier-after-match"
+source = "positive: R7.4-style rule"
+expect = "accept"
+body = '''if declassify::eq_public(&identifier, &user) {
+        e.field("identifier", &declassify::known_identifier(&identifier, &user));
+    } else {
+        e.field("identifier", &Public::lit("<unknown>"));
+    }'''
+
+[[case]]
+id = "Y04-keyed-hash"
+source = "positive: correlation without content"
+expect = "accept"
+body = '''e.field("email_ref", &crypto::keyed_hash(hk, &email));'''
+
+[[case]]
+id = "Y05-deliver"
+source = "positive: deliverable secret to the user"
+expect = "accept"
+body = '''let mut l = deliver::Line::new(); l.secret(&key); deliver::emit(l);'''
+
+[[case]]
+id = "Y06-len-granted"
+source = "positive: granted len view"
+expect = "accept"
+body = '''e.field("pin_len", &declassify::len(&pin));'''
+
+[[case]]
+id = "Y07-comparison-bit"
+source = "positive: granted eq view (one bit)"
+expect = "accept"
+body = '''let same = declassify::eq(&pin, &pin);
+    e.field("same", &Public::lit(if same { "yes" } else { "no" }));'''
+
+[[case]]
+id = "Y08-concat-publics"
+source = "positive: combining public values"
+expect = "accept"
+body = '''e.field("greeting", &Public::lit("hi ").concat(&user));'''
+
+[[case]]
+id = "Y09-password-verify"
+source = "positive: authentication outcome"
+expect = "accept"
+body = '''let h = crypto::password_hash(&password);
+    let ok = crypto::password_verify(&password, &h);
+    e.field("outcome", &Public::lit(if ok { "success" } else { "failure" }));'''
+
+[[case]]
+id = "Y10-generated-last-n"
+source = "positive: precondition from generation"
+expect = "accept"
+body = '''let k = schema::generate_api_key();
+    e.field("new_key_last4", &schema::last_n_api_key(&k));'''
+
+[[case]]
+id = "Y11-number"
+source = "positive: public number"
+expect = "accept"
+body = '''e.field("n", &Public::num(42));'''
+
+[[case]]
+id = "Y12-digest-compare"
+source = "positive: digest comparison bit"
+expect = "accept"
+body = '''let d1 = crypto::digest(&key);
+    let d2 = crypto::digest(&key);
+    e.field("match", &Public::lit(if crypto::digest_eq(&d1, &d2) { "yes" } else { "no" }));'''
