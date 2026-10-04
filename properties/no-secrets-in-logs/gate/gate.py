@@ -151,7 +151,8 @@ def main():
     versions = {}
     for name, cmd in TOOL_VERSIONS:
         try:
-            versions[name] = subprocess.run(cmd, env=env, capture_output=True, text=True).stdout.strip().splitlines()[0]
+            out = subprocess.run(cmd, env=env, capture_output=True, text=True).stdout.strip()
+            versions[name] = " ".join(line.strip() for line in out.splitlines()[:3])
         except (OSError, IndexError):
             versions[name] = "unavailable"
 

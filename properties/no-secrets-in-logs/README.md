@@ -39,8 +39,21 @@ Dockerfile for the `docker run` line, with `--network none`).
 | **protected paths** | everything except `app/src/*.rs` equals the package + frozen classification |
 | **CodeQL** | `rust/cleartext-logging` with package models + choke-point query; catches classification gaps |
 
-The gate test suite (`tests/`) shows which layer catches which channel:
-see [`tests/RESULTS.md`](tests/RESULTS.md).
+## Status (v0.1)
+
+| check (INTENT.md §2.7) | result |
+|---|---|
+| 1. gate test suite | 49/49 negatives rejected, 12/12 positives accepted, no negative caught by CodeQL alone except the intended spec-gap case — [`tests/RESULTS.md`](tests/RESULTS.md) |
+| 3. mutation testing (demo app) | 88/88 mutants killed — [`tests/MUTATION-demo.md`](tests/MUTATION-demo.md) |
+| 4. determinism (demo app) | 3 gate runs in the pinned image with `--network none`: identical verdicts, step results and CodeQL output |
+| 2. five pipeline runs on `kratlet` | not started — see [`RUNBOOK.md`](RUNBOOK.md) |
+| 5. claim document | not started (after the pipeline runs) |
+
+Findings from the suite: for eight bypasses (`assume`, `admit`,
+`external_body`, `#[verifier::external]`, `#[cfg]` hiding, code outside
+`verus!`, `macro_rules!`, `include!`) the structure check is the only layer
+that rejects them — Verus alone accepts them. A wrongly classified secret
+(D01) is caught only by CodeQL, as intended.
 
 ## Trusted base
 
