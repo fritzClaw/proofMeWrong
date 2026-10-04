@@ -92,7 +92,7 @@ injection later.
 - The labels are derived **by an LLM from the user requirements** and written
   to a separate, machine-readable **classification** file.
 - The classification also contains the **declassification policy**: for each
-  secret, the allowed views (e.g. `password: []`, `api_key: [last4]`).
+  secret, the allowed views (e.g. `password: []`, `access_token: [last8]`).
 - The classification is **frozen** before coding starts (hash recorded). The
   coding agent must not change it.
 - Human review/approval of the classification is **optional** and recommended
@@ -100,21 +100,27 @@ injection later.
 
 ### 2.4 Example application
 
-The agent's input is a **requirements document**, not code. Prototype
-requirements describe a small **authentication service**: a synchronous Rust
-library with a thin CLI, roughly 300–500 LOC.
+The agent's input is a **requirements document**, not code:
+[`requirements/auth-service.md`](requirements/auth-service.md) (`kratlet`).
+It describes a small identity service, a synchronous Rust library with a thin
+CLI, modeled on existing open-source projects so that the details are not
+invented:
 
-- Register user (username, password, email).
-- Login → session token.
-- Request password reset → reset token; perform reset with token.
-- Store API keys per user.
-- **Audit log** for every event (login success/failure, reset requested, …)
-  with useful context, including e.g. the last 4 characters of an API key.
-- At least **one value-dependent logging rule** (e.g. "the username may only
-  appear in the log after it has been validated"), so that Verus has
-  agent-written proof obligations beyond what the type system gives.
+- the self-service flows of **Ory Kratos**: registration, email verification,
+  login/sessions, account recovery;
+- the personal access tokens of **Gitea**: shown once on creation, then
+  identified only by their last eight characters (`token_last_eight`);
+- an **audit log** for every command, with useful incident context.
 
-Expected secrets: password, password hash, session token, reset token, API key.
+The sample is not important in itself. It must only exercise the property:
+
+- several kinds of secrets, which the requirements deliberately do *not* label;
+- declassification needs: token last eight characters (`last_n`), correlating
+  events by email without logging the email (`keyed_hash`);
+- **one value-dependent logging rule** (R7.4): on a failed login, the submitted
+  identifier may be logged only if it matches an existing identity, because
+  unknown identifiers are often mistyped passwords. This gives Verus an
+  agent-written proof obligation beyond what the type system provides.
 
 ### 2.5 Out of scope (prototype)
 
@@ -176,7 +182,7 @@ Target size: < ~300 LOC of Rust plus configuration, reviewable line by line.
 | **rustc (types)** | Explicit-flow property. `Secret<T>` implements neither `Display` nor `Debug`; `Public::new` is visible only inside the package library; `audit::log` accepts only `Public`. |
 | **clippy / ban list** | No other output sinks in the verified code: no print macros, `dbg!`, `log`/`tracing`, formatting `panic!`, writes to stdout/stderr/files; `#![forbid(unsafe_code)]`; no `transmute`. |
 | **Verus (library)** | Each declassifier meets its spec, e.g. `last_n(s, n)` returns exactly the last `n` characters. |
-| **Verus (agent-written)** | Preconditions at declassifier call sites (e.g. `key.len() >= 16` before `last_n(key, 4)`), and value-dependent logging policies from the requirements. |
+| **Verus (agent-written)** | Preconditions at declassifier call sites (e.g. `token.len() == 40` before `last_n(token, 8)`), and value-dependent logging policies from the requirements. |
 | **CodeQL** | Independent cross-check: `rust/cleartext-logging` with models for our declassifiers, plus a custom query "output sink outside `audit`". |
 
 ### 3.3 Declassification
@@ -285,7 +291,6 @@ the classification template, the library and a local check command
 
 ## 5. Open items
 
-- The concrete value-dependent logging rule in the auth-service requirements.
 - Which agent/model runs steps 1 and 2. Default: Claude Code headless, with
   separate sessions per step and the model version logged per run.
 - Exact iteration budget and Z3 `rlimit`.
