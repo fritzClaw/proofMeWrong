@@ -6,10 +6,11 @@
 #     nosecrets-gate:v0.1 /work/run --classification-sha256 <hash> \
 #     [--triage /work/triage/<file>] --report /work/report
 #
-# Base image pinned by digest (python:3.11-bookworm via the Docker Hub mirror on
-# mirror.gcr.io; it already contains git, gcc, curl and unzip). The image ID
+# Base image pinned by digest (python:3.11-trixie via the Docker Hub mirror on
+# mirror.gcr.io; it already contains git, gcc, curl and unzip; Verus needs
+# glibc >= 2.39, trixie has 2.41). The image ID
 # printed by build.sh is what verdicts must reference.
-ARG BASE=mirror.gcr.io/library/python@sha256:3fd8382c50bae84184460a6e1a8ff4eeac0e3ca6a560691cb56bd84d2b6ec9ca
+ARG BASE=mirror.gcr.io/library/python@sha256:27e044f7e01fea05c1760324d58fc5360a0767b9ef098e74ddaf8c70b8f46d26
 FROM ${BASE}
 
 ARG RUST_TOOLCHAIN=1.98.1
