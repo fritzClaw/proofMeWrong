@@ -42,7 +42,12 @@ RUN echo '# warmup' > /tmp/req.md \
     && cp /opt/package/examples/demo.classification.toml /tmp/warm/classification.toml \
     && /opt/package/tools/freeze.sh /tmp/warm \
     && echo "fn main() {}" > /tmp/warm/app/src/main.rs \
-    && cd /tmp/warm && cargo fetch --locked && rm -rf /tmp/warm /tmp/req.md
+    && cd /tmp/warm && cargo fetch --locked \
+    # The CodeQL Rust extractor also loads the rust-src workspace, whose
+    # crates must be in the cache too; check that loading worked.
+    && codeql database create /tmp/warmdb --language=rust --source-root=/tmp/warm > /tmp/warmdb.log 2>&1 \
+    && ! grep -q "failed to load workspace" /tmp/warmdb.log \
+    && rm -rf /tmp/warm /tmp/warmdb /tmp/warmdb.log /tmp/req.md
 ENV CARGO_NET_OFFLINE=true
 
 ENTRYPOINT ["python3", "/opt/package/gate/gate.py"]
