@@ -1,0 +1,26 @@
+{
+  "name": "proofMeWrong (no-secrets-in-logs)",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": "."
+  },
+  // Agents (steps 1 and 2) need either `claude login` inside the container or
+  // an API key passed in from the host.
+  "remoteEnv": {
+    "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}"
+  },
+  "postCreateCommand": "properties/no-secrets-in-logs/run-pipeline.sh doctor",
+  "hostRequirements": {
+    "cpus": 4,
+    "memory": "16gb",
+    "storage": "64gb"
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "rust-lang.rust-analyzer",
+        "GitHub.vscode-codeql"
+      ]
+    }
+  }
+}

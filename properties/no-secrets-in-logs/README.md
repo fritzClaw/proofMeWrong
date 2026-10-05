@@ -14,17 +14,24 @@ the correctness of the classification itself are out of scope (INTENT.md §2.5).
 
 ## Pipeline
 
+Everything is driven by one script, started by a human (never by an agent),
+ideally inside the DevContainer (`.devcontainer/` at the repository root),
+which has every tool in the pinned version:
+
 ```
-tools/new-project.sh <run> requirements.md      # human
-  step 1: agent with skills/no-secrets-in-logs-classify  -> <run>/classification.toml
-  (optional) human reviews classification.toml
-tools/freeze.sh <run>                            # human; prints the classification hash — keep it
-  step 2: agent with skills/no-secrets-in-logs-code      -> <run>/app/src/*.rs
-          (agent may run tools/check.sh <run>; no authority)
-gate/gate.py <run> --classification-sha256 <hash> [--triage <file>]   # human only
+./run-pipeline.sh doctor                 # check the pinned toolchain
+./run-pipeline.sh suite                  # gate test suite (criterion 1)
+./run-pipeline.sh run --runs 5 --review  # N pipeline runs (criteria 2-4)
+./run-pipeline.sh gate <run> <sha256> --triage <file>   # re-run the gate after triage
 ```
 
-Or run the gate in the pinned image (`gate/image/build.sh`, see its
+Each run: new project → step 1 (classification agent, fresh session) →
+optional review → freeze (hash kept outside the run) → step 2 (coding agent,
+fresh session, local check limited to a budget) → gate, repeated for the
+determinism check → mutation testing. Results go to `<out>/results.md`.
+`./run-pipeline.sh --help` lists all options.
+
+The gate can also run in the pinned image (`gate/image/build.sh`, see its
 Dockerfile for the `docker run` line, with `--network none`).
 
 ## How the claim is enforced
@@ -46,7 +53,7 @@ Dockerfile for the `docker run` line, with `--network none`).
 | 1. gate test suite | 49/49 negatives rejected, 12/12 positives accepted, no negative caught by CodeQL alone except the intended spec-gap case — [`tests/RESULTS.md`](tests/RESULTS.md) |
 | 3. mutation testing (demo app) | 88/88 mutants killed — [`tests/MUTATION-demo.md`](tests/MUTATION-demo.md) |
 | 4. determinism (demo app) | 3 gate runs in the pinned image with `--network none`: identical verdicts, step results and CodeQL output |
-| 2. five pipeline runs on `kratlet` | not started — see [`RUNBOOK.md`](RUNBOOK.md) |
+| 2. five pipeline runs on `kratlet` | `./run-pipeline.sh run --runs 5` |
 | 5. claim document | not started (after the pipeline runs) |
 
 Findings from the suite: for eight bypasses (`assume`, `admit`,
