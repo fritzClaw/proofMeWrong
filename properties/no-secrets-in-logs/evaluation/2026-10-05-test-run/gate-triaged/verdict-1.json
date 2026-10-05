@@ -1,0 +1,72 @@
+{
+  "classification_sha256": "8a14389374a2d2248bdcf7e4f4c94d6ac251ef5313c19999486cb45dbdc02d7f",
+  "package": "no-secrets-in-logs v0.2",
+  "run": "<out>/run-1/run",
+  "started": "20261005T215722Z",
+  "steps": [
+    {
+      "exit_code": 0,
+      "log": "1-protected.log",
+      "ok": true,
+      "step": "protected"
+    },
+    {
+      "exit_code": 0,
+      "log": "2-structure.log",
+      "ok": true,
+      "step": "structure"
+    },
+    {
+      "exit_code": 0,
+      "log": "3-deps.log",
+      "ok": true,
+      "step": "deps"
+    },
+    {
+      "exit_code": 0,
+      "log": "4-verus.log",
+      "ok": true,
+      "step": "verus"
+    },
+    {
+      "exit_code": 0,
+      "log": "5-clippy.log",
+      "ok": true,
+      "step": "clippy"
+    },
+    {
+      "exit_code": 0,
+      "log": "6-codeql-run.log",
+      "ok": true,
+      "step": "codeql-run"
+    },
+    {
+      "ok": true,
+      "open_alerts": [],
+      "step": "codeql",
+      "triaged": [
+        {
+          "file": "/app/src/main.rs",
+          "line": 100,
+          "message": "This operation writes [[\"... .duplicate()\"|\"relative:///app/src/main.rs:310:26:310:48\"]] to a log file.\nThis operation writes [[\"... .duplicate()\"|\"relative:///app/src/main.rs:360:22:360:44\"]] to a log file.\nThis operation writes [[\"... .duplicate()\"|\"relative:///app/src/main.rs:397:22:397:51\"]] to a log file.\nThis operation writes [[\"... .duplicate()\"|\"relative:///app/src/main.rs:443:22:443:51\"]] to a log file.\nThis operation writes [[\"... .duplicate()\"|\"relative:///app/src/main.rs:466:22:466:51\"]] to a log file.\nThis operation writes [[\"... .duplicate()\"|\"relative:///app/src/main.rs:484:22:484:44\"]] to a log file.\nThis operation writes [[\"... .duplicate()\"|\"relative:///app/src/main.rs:520:26:520:48\"]] to a log file.\nThis operation writes [[\"... .duplicate()\"|\"relative:///app/src/main.rs:571:22:571:51\"]] to a log file.\nThis operation writes [[\"... .duplicate()\"|\"relative:///app/src/main.rs:603:22:603:51\"]] to a log file.\nThis operation writes [[\"... .duplicate()\"|\"relative:///app/src/main.rs:633:22:633:51\"]] to a log file.\nThis operation writes [[\"... .duplicate()\"|\"relative:///app/src/main.rs:667:26:667:59\"]] to a log file.\nThis operation writes [[\"... .duplicate()\"|\"relative:///app/src/main.rs:691:22:691:51\"]] to a log file.",
+          "query": "Cleartext logging of sensitive information",
+          "triage": {
+            "author": "human (prepared by Claude for the test run, pending owner confirmation)",
+            "file": "/app/src/main.rs",
+            "line": 100,
+            "query": "Cleartext logging of sensitive information",
+            "reason": "CodeQL false positive (case ii). Source: `id.username.duplicate()` (line 310);\nCodeQL's name heuristic treats the identity record `id` (which also holds\nthe password hash and code digests) as sensitive. The logged value is the\n`username` field, labeled `public` in the frozen classification (command\n`register`, argument `username`), i.e. allowed in the log by R7.2."
+          }
+        }
+      ]
+    }
+  ],
+  "tool_versions": {
+    "cargo-deny": "cargo-deny 0.18.9",
+    "codeql": "2.27.1",
+    "rustc": "rustc 1.97.0 (2d8144b78 2026-07-07)",
+    "verus": "Verus Version: 0.2026.10.04.fc7d32e Profile: release"
+  },
+  "triage_file": "<out>/triage-run-1.toml",
+  "verdict": "PASS"
+}

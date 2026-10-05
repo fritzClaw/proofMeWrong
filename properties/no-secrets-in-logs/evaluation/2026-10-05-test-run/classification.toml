@@ -1,0 +1,130 @@
+format = "no-secrets-in-logs/classification/v1"
+
+[kinds.email]
+description = "Email address: personal data that must not appear in the log (R7.3); also the key for verification and recovery"
+views = ["eq", "check", "len", "keyed_hash"]
+deliver = true
+
+[kinds.login_identifier]
+description = "Submitted login identifier (username or email); may be a mistyped password (R7.4)"
+views = ["eq_public", "eq_with:email", "known_identifier"]
+
+[kinds.password]
+description = "Account password (registration, login, reset)"
+views = ["check", "password_hash"]
+
+[kinds.verification_code]
+description = "6-digit email verification code, generated and as submitted by the user"
+views = ["eq", "check", "digest"]
+deliver = true
+generate = "digits:6"
+
+[kinds.recovery_code]
+description = "6-digit account recovery code, generated and as submitted by the user"
+views = ["eq", "check", "digest"]
+deliver = true
+generate = "digits:6"
+
+[kinds.session_token]
+description = "Session token (32 random bytes as hex); grants access to the session"
+views = ["eq", "digest"]
+deliver = true
+generate = "hex:64"
+
+[kinds.access_token]
+description = "Personal access token (40 hex chars); shown once, identified by last eight characters"
+views = ["eq", "check", "digest", "last_n:8"]
+deliver = true
+generate = "hex:40"
+
+[[commands]]
+name = "register"
+args = [
+  { name = "username", label = "public" },
+  { name = "email", label = "secret", kind = "email" },
+  { name = "password", label = "secret", kind = "password" },
+]
+
+[[commands]]
+name = "verify"
+args = [
+  { name = "email", label = "secret", kind = "email" },
+  { name = "code", label = "secret", kind = "verification_code" },
+]
+
+[[commands]]
+name = "resend-verification"
+args = [
+  { name = "email", label = "secret", kind = "email" },
+]
+
+[[commands]]
+name = "login"
+args = [
+  { name = "identifier", label = "secret", kind = "login_identifier" },
+  { name = "password", label = "secret", kind = "password" },
+]
+
+[[commands]]
+name = "whoami"
+args = [
+  { name = "session_token", label = "secret", kind = "session_token" },
+]
+
+[[commands]]
+name = "logout"
+args = [
+  { name = "session_token", label = "secret", kind = "session_token" },
+]
+
+[[commands]]
+name = "recover"
+args = [
+  { name = "email", label = "secret", kind = "email" },
+]
+
+[[commands]]
+name = "reset-password"
+args = [
+  { name = "email", label = "secret", kind = "email" },
+  { name = "code", label = "secret", kind = "recovery_code" },
+  { name = "new_password", label = "secret", kind = "password" },
+]
+
+[[commands]]
+name = "token-create"
+args = [
+  { name = "session_token", label = "secret", kind = "session_token" },
+  { name = "name", label = "public" },
+]
+
+[[commands]]
+name = "token-list"
+args = [
+  { name = "session_token", label = "secret", kind = "session_token" },
+]
+
+[[commands]]
+name = "token-delete"
+args = [
+  { name = "session_token", label = "secret", kind = "session_token" },
+  { name = "name", label = "public" },
+]
+
+[[commands]]
+name = "token-check"
+args = [
+  { name = "token", label = "secret", kind = "access_token" },
+]
+
+[[commands]]
+name = "outbox"
+args = [
+  { name = "email", label = "secret", kind = "email" },
+]
+
+[[commands]]
+name = "tick"
+args = [
+  { name = "minutes", label = "u64" },
+]

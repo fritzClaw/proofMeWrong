@@ -1,0 +1,12 @@
+"Cleartext logging of sensitive information","Logging sensitive information in plaintext can expose it to an attacker.","warning","This operation writes [[""... .duplicate()""|""relative:///app/src/main.rs:310:26:310:48""]] to a log file.
+This operation writes [[""... .duplicate()""|""relative:///app/src/main.rs:360:22:360:44""]] to a log file.
+This operation writes [[""... .duplicate()""|""relative:///app/src/main.rs:397:22:397:51""]] to a log file.
+This operation writes [[""... .duplicate()""|""relative:///app/src/main.rs:443:22:443:51""]] to a log file.
+This operation writes [[""... .duplicate()""|""relative:///app/src/main.rs:466:22:466:51""]] to a log file.
+This operation writes [[""... .duplicate()""|""relative:///app/src/main.rs:484:22:484:44""]] to a log file.
+This operation writes [[""... .duplicate()""|""relative:///app/src/main.rs:520:26:520:48""]] to a log file.
+This operation writes [[""... .duplicate()""|""relative:///app/src/main.rs:571:22:571:51""]] to a log file.
+This operation writes [[""... .duplicate()""|""relative:///app/src/main.rs:603:22:603:51""]] to a log file.
+This operation writes [[""... .duplicate()""|""relative:///app/src/main.rs:633:22:633:51""]] to a log file.
+This operation writes [[""... .duplicate()""|""relative:///app/src/main.rs:667:26:667:59""]] to a log file.
+This operation writes [[""... .duplicate()""|""relative:///app/src/main.rs:691:22:691:51""]] to a log file.","/app/src/main.rs","100","21","100","27"

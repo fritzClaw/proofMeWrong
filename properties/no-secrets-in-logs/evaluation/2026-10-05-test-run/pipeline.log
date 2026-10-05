@@ -1,0 +1,223 @@
+
+============================================================================
+  no-secrets-in-logs: 1 pipeline run(s)
+============================================================================
+  Requirements: /home/user/proofMeWrong/requirements/auth-service.md
+  Output:       <out>
+  Agent CLI:    claude 
+  Budget:       20 local checks per coding agent
+  Gate repeats: 3 (determinism check)
+  
+  Each run uses two fresh agent sessions that know nothing about each
+  other or about earlier runs. Agents only get the skill for their step
+  and the run directory; they cannot run the gate, see CodeQL results or
+  change the package.
+
+============================================================================
+  doctor: checking the pinned toolchain
+============================================================================
+  The gate is only meaningful with the exact tool versions it was tested
+  with. They are pinned in gate/image/versions.env and installed in the
+  DevContainer (.devcontainer/).
+  [ OK ] python3 >= 3.11
+  [ OK ] rustup toolchain 1.98.1
+  [ OK ] clippy for 1.98.1
+  [ OK ] rust-src for 1.98.1 (CodeQL)
+  [ OK ] verus 0.2026.10.04.fc7d32e
+  [ OK ] cargo verus
+  [ OK ] cargo-deny 0.18.9
+  [ OK ] codeql 2.27.1
+  [ OK ] codeql Rust support
+  [ OK ] agent CLI (claude)
+  [ OK ] toolchain complete
+  [NOTE] Agent login is not checked here; 'claude -p hello' must work for 'run'.
+
+----------------------------------------------------------------------------
+  package snapshot
+----------------------------------------------------------------------------
+  All runs use a snapshot of the package taken now, so that edits in the
+  repository during the evaluation cannot change the gate. The snapshot
+  lives outside every run directory; agents cannot write to it.
+  [NOTE] package snapshot: <out>/package
+  [NOTE] package fingerprint: 20544487cf15fe20f42846f58a01e14783b66bf3646e082702e2c61f656331fd
+
+============================================================================
+  run 1 of 1
+============================================================================
+
+----------------------------------------------------------------------------
+  run 1: create the run directory
+----------------------------------------------------------------------------
+  A fresh copy of the project template: pinned toolchain and lock file,
+  ban list (clippy.toml), dependency allowlist (deny.toml) and an empty
+  app crate. The requirements are copied in.
+  created <out>/run-1/run — next: step 1 writes <out>/run-1/run/classification.toml, then run tools/freeze.sh <out>/run-1/run
+
+----------------------------------------------------------------------------
+  run 1: step 1 — classification (fresh agent session)
+----------------------------------------------------------------------------
+  The classification agent reads requirements.md and writes
+  classification.toml: which values are secret (kinds), what may be
+  revealed about each (views), what may be shown to the user (deliver),
+  and the typed CLI commands. It may only read, write files in the run
+  directory, and run the schema generator to validate its output.
+  Agent 'classify' starts in <out>/run-1/run
+    tools: Read Write Edit Glob Grep Bash(python3 <out>/package/codegen/gen_schema.py:*)
+    log:   <out>/run-1/step1-classify.json
+  agent finished: reason=completed turns=4 cost=$0.20 models=claude-haiku-4-5-20251001, claude-sonnet-5-5
+  ---- agent's final report ----
+  | I wrote `<out>/run-1/run/classification.toml`, and `gen_schema.py` accepted it (no output, no errors).
+  | 
+  | **Public values (logged as is):**
+  | - `username` and the token `name` are labelled `public`. R7.2 wants the username and token name in the log.
+  | - `minutes` on `tick` is a `u64`.
+  | 
+  | **Secret kinds:**
+  | 
+  | | Kind | Views | Justification |
+  | |---|---|---|
+  | | `email` | `eq`, `check`, `len`, `keyed_hash`, deliver | `eq` looks up identities and matches verify/recover codes. `check` and `len` cover the format and 254-character rules (R2.2). `keyed_hash` lets operators tell whether events concern the same address without logging it (R7.3). `deliver` is for `whoami` and `outbox` output. |
+  | | `login_identifier` | `eq_public`, `eq_with:email`, `known_identifier` | It can be a mistyped password. `eq_public` matches it against usernames, `eq_with:email` against emails (R4.1). `known_identifier` allows logging it only when it matches an existing identity (R7.4). |
+  | | `password` | `check`, `password_hash` | `check` enforces 12–128 characters (R2.2). `password_hash` covers salted storage and verification (R2.3). Login and `new_password` share this kind. No `deliver`. |
+  | | `verification_code` | `eq`, `check`, `digest`, deliver, `generate = digits:6` | `eq` compares the submitted code with the stored one. `digest` is for storage (R3). `deliver` puts it in the outbox. |
+  | | `recovery_code` | `eq`, `check`, `digest`, deliver, `generate = digits:6` | Same as above (R5). I kept it separate from the verification code so one kind of code can't be swapped for the other. |
+  | | `session_token` | `eq`, `digest`, deliver, `generate = hex:64` | 32 random bytes as hex (R4.2). `eq` looks up the session. `digest` is for storage. `deliver` lets `login` print it. |
+  | | `access_token` | `eq`, `check`, `digest`, `last_n:8`, deliver, `generate = hex:40` | 40 hex characters (R6.1). `last_n:8` serves `token-list` and the audit entry (R6.3, R7.2). `digest` stores only a hash (R6.2). `deliver` shows it once on `token-create`. |
+  | 
+  | All 14 commands from the requirements are listed with their arguments in order.
+  ------------------------------
+  [ OK ] classification.toml is valid
+  Kinds and views:
+    access_token             views=['eq', 'check', 'digest', 'last_n:8'] deliver generate hex:40
+    email                    views=['eq', 'check', 'len', 'keyed_hash'] deliver
+    login_identifier         views=['eq_public', 'eq_with:email', 'known_identifier'] 
+    password                 views=['check', 'password_hash'] 
+    recovery_code            views=['eq', 'check', 'digest'] deliver generate digits:6
+    session_token            views=['eq', 'digest'] deliver generate hex:64
+    verification_code        views=['eq', 'check', 'digest'] deliver generate digits:6
+    commands: register, verify, resend-verification, login, whoami, logout, recover, reset-password, token-create, token-list, token-delete, token-check, outbox, tick
+
+----------------------------------------------------------------------------
+  run 1: review and freeze
+----------------------------------------------------------------------------
+  [NOTE] no human review (use --review for anything of value)
+  Freezing: the trusted library is generated from the classification
+  and the classification hash is recorded outside the run directory,
+  where the coding agent cannot change it.
+  [ OK ] frozen, classification sha256 8a14389374a2d2248bdcf7e4f4c94d6ac251ef5313c19999486cb45dbdc02d7f
+
+----------------------------------------------------------------------------
+  run 1: step 2 — code and proof (fresh agent session)
+----------------------------------------------------------------------------
+  Pre-building vstd and the trusted library (does not count against the
+  budget), so that the agent's checks are incremental and fast.
+  [ OK ] pre-build done
+  The coding agent implements requirements.md in app/src against the
+  frozen classification. It may read and write files in the run
+  directory and run the local check (<out>/run-1/bin/check: structure,
+  Verus, clippy; at most 20 times). It cannot run the gate or
+  CodeQL, and its own check result has no authority.
+  Agent 'code' starts in <out>/run-1/run
+    tools: Read Write Edit Glob Grep Bash(<out>/run-1/bin/check) Bash(<out>/run-1/bin/check:*)
+    log:   <out>/run-1/step2-code.json
+  agent finished: reason=completed turns=26 cost=$0.66 models=claude-haiku-4-5-20251001, claude-sonnet-5-5
+  ---- agent's final report ----
+  | I wrote `app/src/main.rs`, and my last local check (run 2 of 20) said `local check: OK (not a gate verdict)`. That run reported Verus at 38 verified, 0 errors. Clippy passed its ban list and only produced style warnings. I have not claimed the program is verified or accepted. The gate decides that.
+  | 
+  | Run 1 failed because Verus treats `has` as a keyword. Renaming the variable to `have` fixed it. Bash was denied once during this session and worked again on the next attempt.
+  | 
+  | **What I implemented**
+  | - **State:** In-memory identities, sessions, access tokens and an outbox, all in one file inside a single `verus!` block. The main loop sits in a function marked `exec_allows_no_decreases_clause`. `schema::Command` is handled in full: register, verify, resend-verification, login, whoami, logout, recover, reset-password, the four token commands, outbox, tick, and invalid/empty lines.
+  | - **Storage:** Passwords are stored only as `password_hash`. Verification and recovery codes are stored only as `digest`, with 15-minute expiry and a 5-attempt limit. Access tokens are stored as a digest plus their last eight characters. Session tokens are held in memory only as `Secret` values.
+  | - **Behaviours:**
+  |   - Login accepts a username or an email, with a 5-failure / 15-minute lockout.
+  |   - A password reset ends all sessions of that identity.
+  |   - Access tokens need a verified identity and are 40 hex characters, generated by `generate_access_token`.
+  |   - Sessions last 24 hours of logical time.
+  | - **Responses:** Failed login and `recover` give the same response whether or not the account exists.
+  | 
+  | **How each logging requirement is met**
+  | - **Every command produces exactly one audit entry.** Each entry has seq, time, event, outcome and reason, plus context fields (`user`, `email_hash`, `identifier`, `token_name`, `token_last8`). All fields are `Public`, so the `audit` API already rules out secret values.
+  | - **No email in the log (R7.3).** Entries carry `crypto::keyed_hash(&key, &email)` instead of the address, so events for the same address can be correlated.
+  | - **Failed-login identifier (R7.4).** The identifier is logged only inside `if declassify::eq_public(&ident, &username)`, via `declassify::known_identifier`, whose precondition comes from that check. If an email matched, the log says `<email>`. If nothing matched, it says `<unknown>`.
+  | - **Token events (R7.2).** `last_n_access_token` is called right after `generate_access_token()`, whose `ensures r@.len() == 40` supplies the length precondition. For `token-check`, the stored last-eight is logged and only on a valid token.
+  | - **Nothing that grants access reaches the log (R7.5).** Passwords, codes, session tokens and full access tokens go only to `deliver` (stdout) or into the hashes and digests described above.
+  | 
+  | **Requirement I could not fully meet**
+  | - R2.2 says an email must contain exactly one `@` with non-empty parts. The `email` kind only grants `eq`, `check`, `len` and `keyed_hash`, and `check` covers only length ranges, digits and hex. I can enforce the length (3–254) but not the `@` structure. Meeting it would need a different view in the classification.
+  | 
+  | Clippy still prints 24 style warnings in the app crate (for example `i = i + 1` instead of `i += 1`). I left them because the check does not treat them as failures.
+  ------------------------------
+  The agent used 2 of 20 local checks.
+
+----------------------------------------------------------------------------
+  run 1: gate (3 times, for the determinism check)
+----------------------------------------------------------------------------
+  The gate works on a fresh copy of the run and checks, in order:
+  protected paths (re-derived from the package and the frozen
+  classification), structure, dependency allowlist, Verus, clippy ban
+  list, CodeQL (rust/cleartext-logging with package models + choke-point
+  query). PASS only if every step passes.
+  
+  gate run 1 of 3:
+    [PASS] protected
+    [PASS] structure
+    [PASS] deps
+    [PASS] verus
+    [PASS] clippy
+    [PASS] codeql-run
+    [FAIL] codeql (1 open, 0 triaged)
+          /app/src/main.rs:100: Cleartext logging of sensitive information: This operation writes [["... .duplicate()"|"relative:///app/src/main.rs:310:26:310:48"]] to a log file.
+    This operation writes [["... .duplicate()"|"relative:///
+    VERDICT: FAIL   (report: <out>/run-1/gate-1)
+  
+  gate run 2 of 3:
+    [PASS] protected
+    [PASS] structure
+    [PASS] deps
+    [PASS] verus
+    [PASS] clippy
+    [PASS] codeql-run
+    [FAIL] codeql (1 open, 0 triaged)
+          /app/src/main.rs:100: Cleartext logging of sensitive information: This operation writes [["... .duplicate()"|"relative:///app/src/main.rs:310:26:310:48"]] to a log file.
+    This operation writes [["... .duplicate()"|"relative:///
+    VERDICT: FAIL   (report: <out>/run-1/gate-2)
+  
+  gate run 3 of 3:
+    [PASS] protected
+    [PASS] structure
+    [PASS] deps
+    [PASS] verus
+    [PASS] clippy
+    [PASS] codeql-run
+    [FAIL] codeql (1 open, 0 triaged)
+          /app/src/main.rs:100: Cleartext logging of sensitive information: This operation writes [["... .duplicate()"|"relative:///app/src/main.rs:310:26:310:48"]] to a log file.
+    This operation writes [["... .duplicate()"|"relative:///
+    VERDICT: FAIL   (report: <out>/run-1/gate-3)
+  [FAIL] gate: FAIL
+  [ OK ] deterministic: 3 identical gate results
+  
+  CodeQL reported 1 open alert(s). Triage each one (INTENT.md §3.6):
+    - classification gap      -> back to step 1 (new run)
+    - CodeQL false positive   -> write a triage file OUTSIDE the run
+                                 (format: examples/demo.triage.toml), then:
+        <out>/package/run-pipeline.sh gate <out>/run-1/run 8a14389374a2d2248bdcf7e4f4c94d6ac251ef5313c19999486cb45dbdc02d7f --triage <file>
+    - trusted-base bug        -> fix the package, add a gate test case
+  Open alerts:
+    /app/src/main.rs:100: Cleartext logging of sensitive information: This operation writes [["... .duplicate()"|"relative:///app/src/main.rs:310:26:310:48"]] to a log file.
+This operation writes [["... .duplicate()"|"re
+
+============================================================================
+  summary
+============================================================================
+# Pipeline results
+
+| run | step 1 | review | step 2 | turns | cost $ | checks | gate | open alerts | deterministic | mutants | min | notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | ok | skipped | done | 26 | 0.66 | 2 | FAIL | 1 | yes | - | 21 | CodeQL alerts need human triage; failed: codeql |
+
+Runs completed: 1 of 1  
+Gate PASS: 0 of 1 (criterion 2 needs at least 1 of 5)  
+Mutation testing (criterion 3): no passing run  
+Determinism (criterion 4): run 1: yes
+exit 0

@@ -1,0 +1,86 @@
+
+============================================================================
+  resume: <out>/run-1
+============================================================================
+  Uses the package snapshot of the evaluation (<out>/package) and the classification
+  hash recorded at freeze time (8a14389374a2d2248bdcf7e4f4c94d6ac251ef5313c19999486cb45dbdc02d7f).
+  Triage file (written by a human):
+    | # Triage for run-1 of the pipeline test (INTENT.md §3.6). Lives outside the
+    | # run directory. Prepared by Claude on behalf of the project owner for the
+    | # test run; the owner should confirm or reject it.
+    | [[suppress]]
+    | query = "Cleartext logging of sensitive information"
+    | file = "/app/src/main.rs"
+    | line = 100
+    | reason = """
+    | CodeQL false positive (case ii). Source: `id.username.duplicate()` (line 310);
+    | CodeQL's name heuristic treats the identity record `id` (which also holds
+    | the password hash and code digests) as sensitive. The logged value is the
+    | `username` field, labeled `public` in the frozen classification (command
+    | `register`, argument `username`), i.e. allowed in the log by R7.2."""
+    | author = "human (prepared by Claude for the test run, pending owner confirmation)"
+
+----------------------------------------------------------------------------
+  gate (3 times, for the determinism check) with triage <out>/triage-run-1.toml
+----------------------------------------------------------------------------
+  The gate works on a fresh copy of the run and checks, in order:
+  protected paths (re-derived from the package and the frozen
+  classification), structure, dependency allowlist, Verus, clippy ban
+  list, CodeQL (rust/cleartext-logging with package models + choke-point
+  query, minus human-triaged alerts). PASS only if every step passes.
+  
+  gate run 1 of 3:
+    [PASS] protected
+    [PASS] structure
+    [PASS] deps
+    [PASS] verus
+    [PASS] clippy
+    [PASS] codeql-run
+    [PASS] codeql (0 open, 1 triaged)
+    VERDICT: PASS   (report: <out>/run-1/gate-triaged-1)
+  
+  gate run 2 of 3:
+    [PASS] protected
+    [PASS] structure
+    [PASS] deps
+    [PASS] verus
+    [PASS] clippy
+    [PASS] codeql-run
+    [PASS] codeql (0 open, 1 triaged)
+    VERDICT: PASS   (report: <out>/run-1/gate-triaged-2)
+  
+  gate run 3 of 3:
+    [PASS] protected
+    [PASS] structure
+    [PASS] deps
+    [PASS] verus
+    [PASS] clippy
+    [PASS] codeql-run
+    [PASS] codeql (0 open, 1 triaged)
+    VERDICT: PASS   (report: <out>/run-1/gate-triaged-3)
+  [ OK ] gate: PASS
+  [ OK ] deterministic: 3 identical gate results
+
+----------------------------------------------------------------------------
+  mutation testing
+----------------------------------------------------------------------------
+  Leaks through every channel of the gate test suite are injected into
+  each function that receives a secret (one function per secret kind).
+  The gate must reject every mutant. This takes a while (about 15 s per
+  mutant).
+  killed: error (details: <out>/run-1/MUTATION.md)
+
+============================================================================
+  summary
+============================================================================
+# Pipeline results
+
+| run | step 1 | review | step 2 | turns | cost $ | checks | gate | open alerts | deterministic | mutants | min | notes |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| 1 | ok | skipped | done | 26 | 0.66 | 2 | PASS | 0 | yes | error | 21 | triage: triage-run-1.toml |
+
+Runs completed: 1 of 1  
+Gate PASS: 1 of 1 (criterion 2 needs at least 1 of 5)  
+Mutation testing (criterion 3): run 1: error  
+Determinism (criterion 4): run 1: yes
+exit 0

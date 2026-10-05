@@ -1,0 +1,14 @@
+# Triage for run-1 of the pipeline test (INTENT.md §3.6). Lives outside the
+# run directory. Prepared by Claude on behalf of the project owner for the
+# test run; the owner should confirm or reject it.
+[[suppress]]
+query = "Cleartext logging of sensitive information"
+file = "/app/src/main.rs"
+line = 100
+reason = """
+CodeQL false positive (case ii). Source: `id.username.duplicate()` (line 310);
+CodeQL's name heuristic treats the identity record `id` (which also holds
+the password hash and code digests) as sensitive. The logged value is the
+`username` field, labeled `public` in the frozen classification (command
+`register`, argument `username`), i.e. allowed in the log by R7.2."""
+author = "human (prepared by Claude for the test run, pending owner confirmation)"
