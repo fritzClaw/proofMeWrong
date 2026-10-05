@@ -5,7 +5,7 @@
 > disagree with it, either the artifact or this document is wrong and must be
 > fixed explicitly.
 
-Status: v0.1 (prototype scope) · Decisions captured from a grilling session.
+Status: v0.2 (prototype scope) · Decisions captured from a grilling session.
 
 **Working agreement.** The project owner decides intent: goals, scope, the
 claim, trust boundaries and success criteria. Implementation details of the
@@ -408,9 +408,30 @@ Delegated details, recorded per the working agreement:
   (case ii in §3.6); the demo triage file shows the format.
 - **Stream separation.** `audit` writes only to stderr and `deliver` only to
   stdout by construction in the trusted library.
-- **Gate image base.** `python:3.11-bookworm`, pinned by digest and pulled
+- **Gate image base.** `python:3.11-trixie` (Verus needs glibc >= 2.39), pinned by digest and pulled
   through `mirror.gcr.io`. Docker Hub rate limits and blocked Debian mirrors
   in the build environment ruled out a slimmer image.
+
+### 3.10 Changes in v0.2 (from the first pipeline test run)
+
+The first end-to-end run of `run-pipeline.sh` showed these problems; v0.2
+fixes them:
+
+| problem found | fix in v0.2 |
+|---|---|
+| The coding agent started the local check in the background and its headless session ended before the result arrived. | Long Bash timeouts, no background tasks, explicit instruction to wait; vstd and the trusted library are pre-built before step 2. |
+| Editing the repository during an evaluation tripped the package integrity check. | The script snapshots the package at the start and uses only the snapshot. |
+| A login identifier could not be compared with stored emails (different kinds), so R4.1 was not implementable. | New verified view `eq_with:<kind>`. |
+| The classification agent labeled the username secret, which made R7.2 (username in the log) impossible. | Classification skill: values the requirements want in the log as is must be `public`. |
+| The `check` view could not express the email shape of R2.2. | New verified check `is_email`. |
+| After a CodeQL false positive there was no way to finish the run (gate repeats, mutation testing). | `run-pipeline.sh resume <run> --triage <file>`. |
+
+Still open: CodeQL's name heuristics produced a false positive in each app
+so far (the demo app and the first generated app), so most runs need human
+triage. Reducing this would mean telling CodeQL about our labels (e.g.
+treating values of type `Public` as clean). That would make CodeQL less
+independent of our type discipline, so it is a decision for the project
+owner, not an implementation detail.
 
 ---
 
