@@ -50,7 +50,7 @@ reviewed leak.
 | `eq_public` | 1 bit: secret equals a public value | look up an identity by a submitted identifier |
 | `eq_with:<kind>` | 1 bit: secret equals a secret of another kind | match a submitted login identifier against stored emails |
 | `known_identifier` | the secret itself, but only when proven equal to a public value | log a submitted identifier only if it matches a known user |
-| `check` | 1 bit: length range / digits / hex format | input validation |
+| `check` | 1 bit: length range / digits / hex / email shape | input validation |
 | `len` | the length | rarely needed |
 | `last_n:N` | the last N characters | identify a token without revealing it |
 | `keyed_hash` | an HMAC (16 hex chars), per-process key | correlate events without the value |

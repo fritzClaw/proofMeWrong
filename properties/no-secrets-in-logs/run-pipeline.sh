@@ -20,9 +20,11 @@
 #                               pinned version (run this first)
 #   suite                       run the gate test suite (criterion 1)
 #   run [options]               N independent pipeline runs (criteria 2-4)
+#   resume <run-out-dir> --triage FILE
+#                               continue a run after a human triaged CodeQL
+#                               alerts: gate repeats, determinism, mutation
 #   gate <run-dir> <sha256> [--triage FILE]
-#                               re-run the gate on one run, e.g. after a human
-#                               wrote a triage file for CodeQL false positives
+#                               run the gate once on a run directory
 #
 # Options for `run`
 #   --runs N              number of independent runs (default 5)
@@ -352,62 +354,11 @@ except Exception: print("-")' "$RO/step2-code.json")"
       say "The agent used $used of $BUDGET local checks."
     fi
 
-    # --- gate -------------------------------------------------------------
+    # --- gate, determinism, mutation ------------------------------------------
     if [ "$s2" = "done" ]; then
-      head2 "run $i: gate ($REPEATS times, for the determinism check)"
-      say "The gate works on a fresh copy of the run and checks, in order:" \
-          "protected paths (re-derived from the package and the frozen" \
-          "classification), structure, dependency allowlist, Verus, clippy ban" \
-          "list, CodeQL (rust/cleartext-logging with package models + choke-point" \
-          "query). PASS only if every step passes."
-      local r verdicts=()
-      for r in $(seq 1 "$REPEATS"); do
-        say "" "gate run $r of $REPEATS:"
-        gate_once "$RUN" "$sha" "$RO/gate-$r" | sed 's/^/    /'
-        verdicts+=("$(python3 "$PKG/tools/verdict_info.py" "$RO/gate-$r/verdict.json" signature)")
-      done
-      verdict="${verdicts[0]%% *}"
-      det="yes"
-      for r in "${verdicts[@]}"; do [ "$r" = "${verdicts[0]}" ] || det="NO"; done
-      if [ "$REPEATS" -gt 1 ]; then
-        for r in $(seq 2 "$REPEATS"); do
-          if [ -f "$RO/gate-1/codeql.csv" ] && ! cmp -s "$RO/gate-1/codeql.csv" "$RO/gate-$r/codeql.csv"; then det="NO"; fi
-        done
-      else
-        det="-"
-      fi
-      alerts="$(python3 "$PKG/tools/verdict_info.py" "$RO/gate-1/verdict.json" alerts-count)"
-      if [ "$verdict" = "PASS" ]; then ok "gate: PASS"; else bad "gate: $verdict"; fi
-      if [ "$det" = "yes" ]; then ok "deterministic: $REPEATS identical gate results"; fi
-      if [ "$det" = "NO" ]; then bad "gate results differ between repeats"; fi
-      if [ "${alerts:-0}" != "0" ]; then
-        say "" "CodeQL reported $alerts open alert(s). Triage each one (INTENT.md §3.6):" \
-            "  - classification gap      -> back to step 1 (new run)" \
-            "  - CodeQL false positive   -> write a triage file OUTSIDE the run" \
-            "                               (format: examples/demo.triage.toml), then:" \
-            "      $PKG/run-pipeline.sh gate $RUN $sha --triage <file>" \
-            "  - trusted-base bug        -> fix the package, add a gate test case" \
-            "Open alerts:"
-        python3 "$PKG/tools/verdict_info.py" "$RO/gate-1/verdict.json" alerts
-        notes="${notes:+$notes; }CodeQL alerts need human triage"
-      fi
-      local failed
-      failed="$(python3 "$PKG/tools/verdict_info.py" "$RO/gate-1/verdict.json" failed)"
-      [ -n "$failed" ] && notes="${notes:+$notes; }failed: $failed"
-    fi
-
-    # --- mutation ---------------------------------------------------------
-    if [ "$verdict" = "PASS" ] && [ "$MUTATION" -eq 1 ]; then
-      head2 "run $i: mutation testing"
-      say "Leaks through every channel of the gate test suite are injected into" \
-          "each function that receives a secret (one function per secret kind)." \
-          "The gate must reject every mutant."
-      python3 "$PKG/tests/mutate.py" "$RUN" --classification-sha256 "$sha" \
-        --work "$RO/mutate" --out "$RO/MUTATION.md" > "$RO/mutate.log" 2>&1
-      mut="$(sed -n 's/^killed \([0-9]*\/[0-9]*\).*/\1/p' "$RO/mutate.log")"
-      [ -n "$mut" ] || mut="error"
-      say "killed: $mut (details: $RO/MUTATION.md)"
-      rm -rf "$RO/mutate/target"
+      evaluate_run "$RO" "$sha" "$REPEATS" "$MUTATION" ""
+      verdict="$EV_VERDICT"; det="$EV_DET"; alerts="$EV_ALERTS"; mut="$EV_MUT"
+      [ -n "$EV_NOTES" ] && notes="${notes:+$notes; }$EV_NOTES"
     fi
 
     rm -rf "$RO/target"
@@ -419,6 +370,110 @@ except Exception: print("-")' "$RO/step2-code.json")"
 
   head1 "summary"
   cat "$OUT/results.md"
+}
+
+# Gate (repeated), determinism check and mutation testing for one run.
+# Sets EV_VERDICT EV_DET EV_ALERTS EV_MUT EV_NOTES.
+evaluate_run() { # run-out-dir sha repeats mutation(0/1) [triage-file]
+  local RO="$1" sha="$2" REPEATS="$3" MUTATION="$4" TRIAGE="${5:-}" RUN="$1/run" r
+  local verdicts=() tag=""
+  [ -n "$TRIAGE" ] && tag="-triaged"
+  EV_VERDICT="-"; EV_DET="-"; EV_ALERTS="-"; EV_MUT="-"; EV_NOTES=""
+  head2 "gate ($REPEATS times, for the determinism check)${TRIAGE:+ with triage $TRIAGE}"
+  say "The gate works on a fresh copy of the run and checks, in order:" \
+      "protected paths (re-derived from the package and the frozen" \
+      "classification), structure, dependency allowlist, Verus, clippy ban" \
+      "list, CodeQL (rust/cleartext-logging with package models + choke-point" \
+      "query, minus human-triaged alerts). PASS only if every step passes."
+  for r in $(seq 1 "$REPEATS"); do
+    say "" "gate run $r of $REPEATS:"
+    gate_once "$RUN" "$sha" "$RO/gate$tag-$r" "$TRIAGE" | sed 's/^/    /'
+    verdicts+=("$(python3 "$PKG/tools/verdict_info.py" "$RO/gate$tag-$r/verdict.json" signature)")
+  done
+  EV_VERDICT="${verdicts[0]%% *}"
+  if [ "$REPEATS" -gt 1 ]; then
+    EV_DET="yes"
+    for r in "${verdicts[@]}"; do [ "$r" = "${verdicts[0]}" ] || EV_DET="NO"; done
+    for r in $(seq 2 "$REPEATS"); do
+      if [ -f "$RO/gate$tag-1/codeql.csv" ] && ! cmp -s "$RO/gate$tag-1/codeql.csv" "$RO/gate$tag-$r/codeql.csv"; then EV_DET="NO"; fi
+    done
+  fi
+  EV_ALERTS="$(python3 "$PKG/tools/verdict_info.py" "$RO/gate$tag-1/verdict.json" alerts-count)"
+  if [ "$EV_VERDICT" = "PASS" ]; then ok "gate: PASS"; else bad "gate: $EV_VERDICT"; fi
+  [ "$EV_DET" = "yes" ] && ok "deterministic: $REPEATS identical gate results"
+  [ "$EV_DET" = "NO" ] && bad "gate results differ between repeats"
+  if [ "${EV_ALERTS:-0}" != "0" ]; then
+    say "" "CodeQL reported $EV_ALERTS open alert(s). Triage each one (INTENT.md §3.6):" \
+        "  - classification gap      -> back to step 1 (new run)" \
+        "  - CodeQL false positive   -> a human writes a triage file OUTSIDE the run" \
+        "                               (format: examples/demo.triage.toml), then:" \
+        "      $PKG/run-pipeline.sh resume $RO --triage <file>" \
+        "  - trusted-base bug        -> fix the package, add a gate test case" \
+        "Open alerts:"
+    python3 "$PKG/tools/verdict_info.py" "$RO/gate$tag-1/verdict.json" alerts
+    EV_NOTES="CodeQL alerts need human triage"
+  fi
+  local failed
+  failed="$(python3 "$PKG/tools/verdict_info.py" "$RO/gate$tag-1/verdict.json" failed)"
+  [ -n "$failed" ] && EV_NOTES="${EV_NOTES:+$EV_NOTES; }failed: $failed"
+  [ -n "$TRIAGE" ] && EV_NOTES="${EV_NOTES:+$EV_NOTES; }triage: $(basename "$TRIAGE")"
+
+  if [ "$EV_VERDICT" = "PASS" ] && [ "$MUTATION" -eq 1 ]; then
+    head2 "mutation testing"
+    say "Leaks through every channel of the gate test suite are injected into" \
+        "each function that receives a secret (one function per secret kind)." \
+        "The gate must reject every mutant. This takes a while (about 15 s per" \
+        "mutant)."
+    python3 "$PKG/tests/mutate.py" "$RUN" --classification-sha256 "$sha" \
+      --work "$RO/mutate" --out "$RO/MUTATION.md" > "$RO/mutate.log" 2>&1
+    EV_MUT="$(sed -n 's/^killed \([0-9]*\/[0-9]*\).*/\1/p' "$RO/mutate.log")"
+    [ -n "$EV_MUT" ] || EV_MUT="error"
+    say "killed: $EV_MUT (details: $RO/MUTATION.md)"
+    grep "SURVIVED" "$RO/mutate.log" | sed 's/^/    /'
+    rm -rf "$RO/mutate/target"
+  fi
+}
+
+# `resume`: continue a run after human triage of CodeQL alerts.
+resume_cmd() {
+  [ $# -ge 1 ] || die "usage: run-pipeline.sh resume <run-out-dir> [--triage FILE] [--gate-repeats N] [--no-mutation]"
+  local RO; RO="$(cd "$1" && pwd)"; shift
+  local TRIAGE="" REPEATS=3 MUTATION=1
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --triage) TRIAGE="$(cd "$(dirname "$2")" && pwd)/$(basename "$2")"; shift 2 ;;
+      --gate-repeats) REPEATS="$2"; shift 2 ;;
+      --no-mutation) MUTATION=0; shift ;;
+      *) die "unknown option: $1" ;;
+    esac
+  done
+  local OUT; OUT="$(dirname "$RO")"
+  [ -d "$OUT/package" ] && PKG="$OUT/package"
+  [ -f "$RO/classification.sha256" ] || die "$RO is not a frozen run (no classification.sha256)"
+  local sha; sha="$(cat "$RO/classification.sha256")"
+  head1 "resume: $RO"
+  say "Uses the package snapshot of the evaluation ($PKG) and the classification" \
+      "hash recorded at freeze time ($sha)."
+  [ -n "$TRIAGE" ] && { say "Triage file (written by a human):"; sed 's/^/    | /' "$TRIAGE"; }
+  evaluate_run "$RO" "$sha" "$REPEATS" "$MUTATION" "$TRIAGE"
+  local i; i="$(basename "$RO" | sed 's/^run-//')"
+  if [ -f "$OUT/results.tsv" ]; then
+    python3 - "$OUT/results.tsv" "$i" "$EV_VERDICT" "$EV_ALERTS" "$EV_DET" "$EV_MUT" "$EV_NOTES" <<'EOF'
+import csv, sys
+path, run, verdict, alerts, det, mut, notes = sys.argv[1:]
+rows = list(csv.DictReader(open(path), delimiter="\t"))
+fields = list(rows[0].keys()) if rows else []
+for r in rows:
+    if r["run"] == run:
+        r.update(gate=verdict, open_alerts=alerts, deterministic=det, mutants=mut, notes=notes)
+with open(path, "w", newline="") as f:
+    w = csv.DictWriter(f, fieldnames=fields, delimiter="\t", lineterminator="\n")
+    w.writeheader(); w.writerows(rows)
+EOF
+    write_summary "$OUT" "$(($(wc -l < "$OUT/results.tsv") - 1))"
+    head1 "summary"
+    cat "$OUT/results.md"
+  fi
 }
 
 write_summary() { # out runs
@@ -448,6 +503,7 @@ case "${1:-}" in
   suite) shift; suite "$@" ;;
   run) shift; run_cmd "$@" ;;
   gate) shift; gate_cmd "$@" ;;
+  resume) shift; resume_cmd "$@" ;;
   ""|-h|--help|help) sed -n '2,50p' "$0" | sed 's/^# \{0,1\}//' ;;
   *) die "unknown subcommand: $1 (try --help)" ;;
 esac

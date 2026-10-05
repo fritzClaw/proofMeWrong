@@ -349,6 +349,12 @@ body = '''if declassify::eq_with(&identifier, &email) {
         e.field("identifier", &declassify::known_identifier(&identifier, &user));
     }'''
 
+[[case]]
+id = "C23-check-not-granted"
+source = "bypass: format check on a kind without the check view"
+expect = "reject"
+body = '''let ok = declassify::is_email(&identifier); e.field("ok", &Public::lit(if ok { "y" } else { "n" }));'''
+
 # ----------------------------------------------------- protected paths
 
 [[case]]
@@ -494,3 +500,10 @@ source = "positive: granted cross-kind comparison (one bit)"
 expect = "accept"
 body = '''let by_email = declassify::eq_with(&identifier, &email);
     e.field("by_email", &Public::lit(if by_email { "yes" } else { "no" }));'''
+
+[[case]]
+id = "Y14-email-shape-check"
+source = "positive: granted check view (email shape, one bit)"
+expect = "accept"
+body = '''let valid = declassify::is_email(&email);
+    e.field("email_valid", &Public::lit(if valid { "yes" } else { "no" }));'''

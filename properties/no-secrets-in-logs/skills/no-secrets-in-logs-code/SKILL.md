@@ -65,7 +65,8 @@ use nosecrets::{crypto, declassify, schema};
   different kinds), `eq_public(&a, &p) -> bool`,
   `known_identifier(&a, &p) -> Public` (`requires a@ == p@`),
   `len_between(&a, lo, hi) -> bool`, `is_digits(&a, n) -> bool`,
-  `is_hex(&a, n) -> bool`, `len(&a) -> Public`. The bool results come with
+  `is_hex(&a, n) -> bool`, `is_email(&a) -> bool` (at most 254 characters,
+  exactly one `@`, non-empty parts), `len(&a) -> Public`. The bool results come with
   precise `ensures` you can use in proofs.
 - `crypto`: `HashKey::generate()`, `keyed_hash(&key, &a) -> Public`,
   `password_hash(&a) -> PasswordHash`, `password_verify(&a, &h) -> bool`,

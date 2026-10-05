@@ -24,7 +24,8 @@ def main(argv):
     elif what == "alerts":
         for s in steps:
             for a in s.get("open_alerts", []):
-                print(f"    {a['file']}:{a['line']}: {a['query']}: {a['message'][:150]}")
+                msg = " ".join(a["message"].split())
+                print(f"    {a['file']}:{a['line']}: {a['query']}: {msg[:200]}")
     elif what == "failed":
         print(",".join(s["step"] for s in steps if not s["ok"]))
     else:

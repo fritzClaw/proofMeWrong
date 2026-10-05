@@ -146,7 +146,8 @@ def main():
             steps.append({"step": "codeql", "ok": not open_alerts, "open_alerts": open_alerts, "triaged": triaged})
             print(f"[{'PASS' if not open_alerts else 'FAIL'}] codeql ({len(open_alerts)} open, {len(triaged)} triaged)")
             for a in open_alerts:
-                print(f"      {a['file']}:{a['line']}: {a['query']}: {a['message'][:160]}")
+                msg = " ".join(a["message"].split())
+                print(f"      {a['file']}:{a['line']}: {a['query']}: {msg[:200]}")
 
     versions = {}
     for name, cmd in TOOL_VERSIONS:

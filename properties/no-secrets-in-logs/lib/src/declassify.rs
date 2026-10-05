@@ -4,7 +4,7 @@
 //! implemented in the generated `schema`).
 //!
 //! Proven (verified bodies): `last_n`, `known_identifier`, `eq`, `eq_with`, `eq_public`,
-//! `len_between`, `is_digits`, `is_hex`.
+//! `len_between`, `is_digits`, `is_hex`, `is_email`.
 //! Trusted (`external_body`): `len`, `keyed_hash` (see `crypto`).
 
 use vstd::prelude::*;
@@ -127,6 +127,79 @@ pub fn is_hex<K: AllowCheck>(a: &Secret<K>, n: usize) -> (r: bool)
         i = i + 1;
     }
     true
+}
+
+/// Shape of an email address as required by the sample requirements: at most
+/// 254 characters, exactly one `@`, with non-empty parts before and after it.
+pub open spec fn is_email_shape(s: Seq<char>) -> bool {
+    s.len() <= 254 && exists|k: int|
+        #![trigger s[k]]
+        0 < k < s.len() - 1 && s[k] == '@' && (forall|j: int| 0 <= j < s.len() && j != k ==> s[j] != '@')
+}
+
+/// Email shape check, revealing one bit.
+pub fn is_email<K: AllowCheck>(a: &Secret<K>) -> (r: bool)
+    ensures r == is_email_shape(a@),
+{
+    let v = a.chars();
+    let n = v.len();
+    if n > 254 {
+        return false;
+    }
+    // count: number of '@' seen so far, saturated at 2; pos: the first one.
+    let mut count: usize = 0;
+    let mut pos: usize = 0;
+    let mut i: usize = 0;
+    while i < n
+        invariant
+            v@ == a@,
+            n == v@.len(),
+            i <= n,
+            count <= 2,
+            count == 0 ==> (forall|j: int| 0 <= j < i ==> v@[j] != '@'),
+            count >= 1 ==> (pos < i && v@[pos as int] == '@'),
+            count == 1 ==> (forall|j: int| 0 <= j < i && j != pos ==> v@[j] != '@'),
+            count == 2 ==> (exists|j: int| #![trigger v@[j]] 0 <= j < i && j != pos && v@[j] == '@'),
+        decreases n - i,
+    {
+        if v[i] == '@' {
+            if count == 0 {
+                pos = i;
+                count = 1;
+            } else if count == 1 {
+                count = 2;
+                assert(v@[i as int] == '@');
+            }
+        }
+        i = i + 1;
+    }
+    let r = count == 1 && pos > 0 && pos + 1 < n;
+    proof {
+        if r {
+            let k = pos as int;
+            assert(0 < k < a@.len() - 1 && a@[k] == '@'
+                && (forall|j: int| 0 <= j < a@.len() && j != k ==> a@[j] != '@'));
+        } else if is_email_shape(a@) {
+            let k = choose|k: int|
+                #![trigger a@[k]]
+                0 < k < a@.len() - 1 && a@[k] == '@' && (forall|j: int| 0 <= j < a@.len() && j != k ==> a@[j] != '@');
+            if count == 0 {
+                assert(a@[k] != '@');
+            } else if count == 1 {
+                if k != pos as int {
+                    assert(a@[k] != '@');
+                }
+            } else {
+                let j2 = choose|j: int| #![trigger v@[j]] 0 <= j < n && j != pos && v@[j] == '@';
+                if k == pos as int {
+                    assert(a@[j2] != '@');
+                } else {
+                    assert(a@[pos as int] != '@');
+                }
+            }
+        }
+    }
+    r
 }
 
 /// Reveal the number of characters.
