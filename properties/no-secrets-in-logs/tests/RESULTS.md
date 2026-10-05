@@ -1,7 +1,7 @@
 # Gate test suite results
 
-Negatives rejected: 51/51  
-Positives accepted: 13/13  
+Negatives rejected: 52/52  
+Positives accepted: 14/14  
 Negatives caught only by CodeQL (gaps in type/proof discipline): none  
 CodeQL: run
 
@@ -54,6 +54,7 @@ Legend: ✗ = layer rejects, · = layer accepts, n/a = not applicable.
 | C20-include | bypass: pull in code from outside app/src | reject | · | ✗ | · | ✗ | · | · | · | ok |
 | C21-eq-with-not-granted | bypass: cross-kind comparison not granted by the classification | reject | · | · | · | ✗ | · | · | · | ok |
 | C22-eq-with-then-known-identifier | bypass: identifier matched against a secret, then logged as if public | reject | · | · | · | · | ✗ | · | · | ok |
+| C23-check-not-granted | bypass: format check on a kind without the check view | reject | · | · | · | ✗ | · | · | · | ok |
 | X01-relax-ban-list | protected: clippy.toml | reject | ✗ | · | · | · | ✗ | · | n/a | ok |
 | X02-add-dependency | protected: app/Cargo.toml (and cargo-deny allowlist) | reject | ✗ | · | ✗ | ✗ | · | · | n/a | ok |
 | X03-modify-trusted-library | protected: trusted/nosecrets | reject | ✗ | · | · | · | · | · | n/a | ok |
@@ -73,3 +74,4 @@ Legend: ✗ = layer rejects, · = layer accepts, n/a = not applicable.
 | Y11-number | positive: public number | accept | · | · | · | · | · | · | · | ok |
 | Y12-digest-compare | positive: digest comparison bit | accept | · | · | · | · | · | · | · | ok |
 | Y13-eq-with-granted | positive: granted cross-kind comparison (one bit) | accept | · | · | · | · | · | · | · | ok |
+| Y14-email-shape-check | positive: granted check view (email shape, one bit) | accept | · | · | · | · | · | · | · | ok |
