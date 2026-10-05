@@ -45,6 +45,7 @@ pub struct Identifier;
 impl Kind for Identifier {}
 impl crate::declassify::AllowEqPublic for Identifier {}
 impl crate::declassify::AllowKnownIdentifier for Identifier {}
+impl crate::declassify::AllowEqWith<Email> for Identifier {}
 
 /// Secret kind `password`: a user's password
 pub struct Password;

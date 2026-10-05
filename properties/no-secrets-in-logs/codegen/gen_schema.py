@@ -50,9 +50,11 @@ def parse(doc):
         unknown = set(spec) - {"description", "views", "deliver", "generate"}
         if unknown:
             raise ClassificationError(f"kind {name}: unknown keys {sorted(unknown)}")
-        views, last_n = [], None
+        views, last_n, eq_with = [], None, []
         for v in spec.get("views", []):
-            if v.startswith("last_n:"):
+            if v.startswith("eq_with:"):
+                eq_with.append(v.split(":", 1)[1])
+            elif v.startswith("last_n:"):
                 n = int(v.split(":", 1)[1])
                 if n <= 0:
                     raise ClassificationError(f"kind {name}: last_n must be positive")
@@ -71,9 +73,14 @@ def parse(doc):
             "description": spec.get("description", ""),
             "views": sorted(set(views)),
             "last_n": last_n,
+            "eq_with": sorted(set(eq_with)),
             "deliver": bool(spec.get("deliver", False)),
             "generate": generate,
         }
+    for name, k in kinds.items():
+        for other in k["eq_with"]:
+            if other not in kinds:
+                raise ClassificationError(f"kind {name}: eq_with refers to unknown kind {other!r}")
     commands = []
     seen = set()
     for cmd in doc.get("commands", []):
@@ -126,6 +133,8 @@ def generate(kinds, commands, source_name):
         w(f"impl Kind for {t} {{}}")
         for v in k["views"]:
             w(f"impl {VIEW_TRAITS[v]} for {t} {{}}")
+        for other in k["eq_with"]:
+            w(f"impl crate::declassify::AllowEqWith<{pascal(other)}> for {t} {{}}")
         if k["last_n"] is not None:
             w(f"impl crate::declassify::AllowLastN for {t} {{}}")
         if k["deliver"]:

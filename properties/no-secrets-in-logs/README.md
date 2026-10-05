@@ -1,4 +1,4 @@
-# Property package `no-secrets-in-logs` v0.1
+# Property package `no-secrets-in-logs` v0.2
 
 The first reusable security property of proofMeWrong (see
 [`INTENT.md`](../../INTENT.md)). It lets a coding agent produce a Rust + Verus

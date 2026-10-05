@@ -19,5 +19,5 @@ find "$CTX/package" -name __pycache__ -prune -exec rm -rf {} +
 [ -n "${EXTRA_CA_CERT:-}" ] && cp "$EXTRA_CA_CERT" "$CTX/extra-ca.crt"
 NET=()
 [ -n "${HTTPS_PROXY:-}" ] && NET=(--network host --build-arg "HTTPS_PROXY=$HTTPS_PROXY" --build-arg "HTTP_PROXY=${HTTP_PROXY:-$HTTPS_PROXY}" --build-arg "https_proxy=$HTTPS_PROXY" --build-arg "http_proxy=${HTTP_PROXY:-$HTTPS_PROXY}")
-docker build "${NET[@]}" -t nosecrets-gate:v0.1 "$CTX"
-docker image inspect nosecrets-gate:v0.1 --format '{{.Id}}'
+docker build "${NET[@]}" -t nosecrets-gate:v0.2 "$CTX"
+docker image inspect nosecrets-gate:v0.2 --format '{{.Id}}'

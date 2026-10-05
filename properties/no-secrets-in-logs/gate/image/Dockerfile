@@ -3,7 +3,7 @@
 # Run:
 #   docker run --rm --network none \
 #     -v <run-dir>:/work/run:ro -v <triage-dir>:/work/triage:ro -v <report-dir>:/work/report \
-#     nosecrets-gate:v0.1 /work/run --classification-sha256 <hash> \
+#     nosecrets-gate:v0.2 /work/run --classification-sha256 <hash> \
 #     [--triage /work/triage/<file>] --report /work/report
 #
 # Base image pinned by digest (python:3.11-trixie via the Docker Hub mirror on

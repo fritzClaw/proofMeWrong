@@ -3,7 +3,7 @@
 //! classification grants the corresponding view (permission trait,
 //! implemented in the generated `schema`).
 //!
-//! Proven (verified bodies): `last_n`, `known_identifier`, `eq`, `eq_public`,
+//! Proven (verified bodies): `last_n`, `known_identifier`, `eq`, `eq_with`, `eq_public`,
 //! `len_between`, `is_digits`, `is_hex`.
 //! Trusted (`external_body`): `len`, `keyed_hash` (see `crypto`).
 
@@ -16,6 +16,9 @@ verus! {
 pub trait AllowEq: Kind {}
 /// View `eq_public`: compare a secret with a public value (reveals one bit).
 pub trait AllowEqPublic: Kind {}
+/// View `eq_with:<kind>`: compare a secret with a secret of another kind `L`
+/// (reveals one bit), e.g. a submitted login identifier with a stored email.
+pub trait AllowEqWith<L: Kind>: Kind {}
 /// View `known_identifier`: reveal a secret that is proven equal to a public value.
 pub trait AllowKnownIdentifier: Kind {}
 /// View `check`: format checks (length range, digits, hex) revealing one bit.
@@ -28,6 +31,13 @@ pub trait AllowLastN: Kind {}
 
 /// Constant-time-shaped comparison of two secrets of the same kind.
 pub fn eq<K: AllowEq>(a: &Secret<K>, b: &Secret<K>) -> (r: bool)
+    ensures r == (a@ == b@),
+{
+    seq_eq(a.chars(), b.chars())
+}
+
+/// Compare a secret with a secret of another kind.
+pub fn eq_with<K: AllowEqWith<L>, L: Kind>(a: &Secret<K>, b: &Secret<L>) -> (r: bool)
     ensures r == (a@ == b@),
 {
     seq_eq(a.chars(), b.chars())

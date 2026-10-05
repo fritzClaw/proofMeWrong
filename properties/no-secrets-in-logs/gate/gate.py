@@ -163,7 +163,7 @@ def main():
         "classification_sha256": args.classification_sha256,
         "triage_file": triage_path,
         "started": stamp,
-        "package": "no-secrets-in-logs v0.1",
+        "package": "no-secrets-in-logs v0.2",
         "tool_versions": versions,
         "steps": steps,
     }

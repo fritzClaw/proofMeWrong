@@ -26,7 +26,7 @@ deliver = true
 
 [kinds.identifier]
 description = "a submitted login identifier (may be a mistyped password)"
-views = ["eq_public", "known_identifier"]
+views = ["eq_public", "known_identifier", "eq_with:email"]
 
 [[commands]]
 name = "signup"

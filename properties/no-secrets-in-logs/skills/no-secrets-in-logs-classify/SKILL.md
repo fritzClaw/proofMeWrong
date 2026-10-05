@@ -48,6 +48,7 @@ reviewed leak.
 |---|---|---|
 | `eq` | 1 bit: two secrets of this kind are equal | compare a submitted code with a stored one |
 | `eq_public` | 1 bit: secret equals a public value | look up an identity by a submitted identifier |
+| `eq_with:<kind>` | 1 bit: secret equals a secret of another kind | match a submitted login identifier against stored emails |
 | `known_identifier` | the secret itself, but only when proven equal to a public value | log a submitted identifier only if it matches a known user |
 | `check` | 1 bit: length range / digits / hex format | input validation |
 | `len` | the length | rarely needed |
@@ -72,6 +73,17 @@ allows logging.
    user submits).
 4. Grant the minimal views and `deliver` that the requirements need.
    Generated values get `generate`.
+   - A value that the requirements explicitly want **in the log as is**
+     (e.g. "the username of the identity involved") must be labeled
+     `public`; a secret can never be logged, so labeling it secret makes the
+     requirement impossible to implement.
+   - A value that may be logged **only under a condition** (e.g. a submitted
+     identifier only if it matches a known identity) is a secret with
+     `known_identifier`; the coding agent can then log it only after proving
+     it equals a public value.
+   - Values of different kinds that must be compared (e.g. a login identifier
+     against stored emails) need `eq_with:<other kind>` on the kind that is
+     compared.
 5. Write every command with its arguments in order.
 6. Check: `python3 <package>/codegen/gen_schema.py <run>/classification.toml /tmp/schema.rs`
    must succeed.

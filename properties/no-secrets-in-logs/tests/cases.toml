@@ -335,6 +335,20 @@ expect = "reject"
 outside = '''include!("../../requirements.md");'''
 body = '''e.field("k", &Public::lit("x"));'''
 
+[[case]]
+id = "C21-eq-with-not-granted"
+source = "bypass: cross-kind comparison not granted by the classification"
+expect = "reject"
+body = '''let same = declassify::eq_with(&identifier, &password); e.field("same", &Public::lit(if same { "y" } else { "n" }));'''
+
+[[case]]
+id = "C22-eq-with-then-known-identifier"
+source = "bypass: identifier matched against a secret, then logged as if public"
+expect = "reject"
+body = '''if declassify::eq_with(&identifier, &email) {
+        e.field("identifier", &declassify::known_identifier(&identifier, &user));
+    }'''
+
 # ----------------------------------------------------- protected paths
 
 [[case]]
@@ -473,3 +487,10 @@ expect = "accept"
 body = '''let d1 = crypto::digest(&key);
     let d2 = crypto::digest(&key);
     e.field("match", &Public::lit(if crypto::digest_eq(&d1, &d2) { "yes" } else { "no" }));'''
+
+[[case]]
+id = "Y13-eq-with-granted"
+source = "positive: granted cross-kind comparison (one bit)"
+expect = "accept"
+body = '''let by_email = declassify::eq_with(&identifier, &email);
+    e.field("by_email", &Public::lit(if by_email { "yes" } else { "no" }));'''

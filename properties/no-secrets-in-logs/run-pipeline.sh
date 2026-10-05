@@ -149,7 +149,11 @@ agent() { # step-name cwd skill-file prompt log allowed-tools...
   say "Agent '$name' starts in $cwd" \
       "  tools: $*" \
       "  log:   $log"
-  ( cd "$cwd" && timeout "$AGENT_TIMEOUT" "$CLAUDE" -p "$prompt" \
+  # Long Bash timeouts (Verus runs take minutes) and no background tasks: a
+  # headless session ends when the agent stops, so it must wait for results.
+  ( cd "$cwd" && BASH_DEFAULT_TIMEOUT_MS=1800000 BASH_MAX_TIMEOUT_MS=3600000 \
+      CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1 \
+      timeout "$AGENT_TIMEOUT" "$CLAUDE" -p "$prompt" \
       --append-system-prompt "$sp" \
       --setting-sources project --strict-mcp-config \
       --permission-mode dontAsk --output-format json \
@@ -213,7 +217,19 @@ run_cmd() {
       "change the package."
 
   doctor || die "toolchain incomplete"
+
+  head2 "package snapshot"
+  say "All runs use a snapshot of the package taken now, so that edits in the" \
+      "repository during the evaluation cannot change the gate. The snapshot" \
+      "lives outside every run directory; agents cannot write to it."
+  local SRC_PKG="$PKG"
+  rm -rf "$OUT/package"
+  mkdir -p "$OUT/package"
+  (cd "$SRC_PKG" && tar --exclude='./gate/image/vendor' --exclude='./lib/target' --exclude='__pycache__' -cf - .) \
+    | (cd "$OUT/package" && tar -xf -)
+  PKG="$OUT/package"
   local FP; FP="$(package_fingerprint)"
+  note "package snapshot: $PKG"
   note "package fingerprint: $FP"
 
   local i
@@ -305,13 +321,22 @@ export CARGO_TARGET_DIR="$RO/target"
 exec "$PKG/tools/check.sh" "$RUN"
 EOF
       chmod +x "$RO/bin/check"
+      say "Pre-building vstd and the trusted library (does not count against the" \
+          "budget), so that the agent's checks are incremental and fast."
+      printf 'use vstd::prelude::*;\nverus! {\nfn main() {}\n}\n' > "$RUN/app/src/main.rs"
+      if CARGO_TARGET_DIR="$RO/target" "$PKG/tools/check.sh" "$RUN" > "$RO/prewarm.log" 2>&1; then
+        ok "pre-build done"
+      else
+        note "pre-build reported problems (see $RO/prewarm.log)"
+      fi
+      rm -f "$RUN/app/src/main.rs"
       say "The coding agent implements requirements.md in app/src against the" \
           "frozen classification. It may read and write files in the run" \
           "directory and run the local check ($RO/bin/check: structure," \
           "Verus, clippy; at most $BUDGET times). It cannot run the gate or" \
           "CodeQL, and its own check result has no authority."
       agent "code" "$RUN" "$PKG/skills/no-secrets-in-logs-code/SKILL.md" \
-        "Implement $RUN/requirements.md in $RUN/app/src for the frozen classification $RUN/classification.toml. The generated library API is in $RUN/trusted/nosecrets/src (read schema.rs first). Your local check command is: $RO/bin/check (no arguments; at most $BUDGET runs)." \
+        "Implement $RUN/requirements.md in $RUN/app/src for the frozen classification $RUN/classification.toml. The generated library API is in $RUN/trusted/nosecrets/src (read schema.rs first). Your local check command is: $RO/bin/check (no arguments; at most $BUDGET runs). Always run it in the foreground with a timeout of at least 1800000 ms and wait for its result; never run it in the background. Keep fixing and re-checking until the check passes or the budget is used up; only then write your final report." \
         "$RO/step2-code.json" \
         "Read" "Write" "Edit" "Glob" "Grep" "Bash($RO/bin/check)" "Bash($RO/bin/check:*)"
       if [ "$(package_fingerprint)" != "$FP" ]; then

@@ -61,7 +61,8 @@ use nosecrets::{crypto, declassify, schema};
 - `Secret<K>`: opaque. No `Display`, `Debug`, `Clone`, `==`, no accessors.
   Its ghost view `s@: Seq<char>` exists for proofs only.
 - `declassify` (each needs the view in the classification, enforced by
-  trait bounds): `eq(&a, &b) -> bool`, `eq_public(&a, &p) -> bool`,
+  trait bounds): `eq(&a, &b) -> bool`, `eq_with(&a, &b) -> bool` (a and b of
+  different kinds), `eq_public(&a, &p) -> bool`,
   `known_identifier(&a, &p) -> Public` (`requires a@ == p@`),
   `len_between(&a, lo, hi) -> bool`, `is_digits(&a, n) -> bool`,
   `is_hex(&a, n) -> bool`, `len(&a) -> Public`. The bool results come with
@@ -107,9 +108,11 @@ the conflict with the requirements.
 ```
 
 runs the structure check, Verus and clippy. Use it as often as you like
-within your iteration budget (default: 20 runs). If it still fails after the
-budget, stop and report the remaining errors. CodeQL is not available to you
-by design.
+within your iteration budget (default: 20 runs). Run it in the foreground
+and wait for the result (it can take several minutes); never run it in the
+background, because your session ends when you stop. Keep fixing and
+re-checking until it passes or the budget is used up, then report. CodeQL is
+not available to you by design.
 
 ## When you are done
 
