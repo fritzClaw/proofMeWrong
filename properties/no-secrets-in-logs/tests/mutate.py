@@ -27,7 +27,9 @@ sys.path.insert(0, HERE)
 from run_suite import LAYERS, run_layers  # noqa: E402
 
 FN_RE = re.compile(r"\bfn\s+([A-Za-z_][A-Za-z0-9_]*)\s*(<[^>]*>)?\s*\(")
-PARAM_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*:\s*&?\s*(?:mut\s+)?Secret\s*<\s*([A-Za-z_][A-Za-z0-9_]*)\s*>")
+# Secret<Kind> or a path-qualified Secret<schema::Kind> / nosecrets::Secret<...>.
+PARAM_RE = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*:\s*&?\s*(?:mut\s+)?(?:[A-Za-z_][A-Za-z0-9_]*::)*Secret\s*<\s*"
+                      r"(?:[A-Za-z_][A-Za-z0-9_]*::)*([A-Za-z_][A-Za-z0-9_]*)\s*>")
 
 
 def matching(src, i, open_c, close_c):
